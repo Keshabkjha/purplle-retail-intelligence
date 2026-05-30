@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+    environment:
+      - DATABASE_URL=sqlite:///./store_intelligence.db
+      - ENV=dev
+    restart: always

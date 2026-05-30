@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Primary Meta Tags -->
+    <title>Purplle Retail • Intelligence Hub</title>
+    <meta name="title" content="Purplle Retail • Intelligence Hub by Keshab Kumar">
+    <meta name="description" content="AI-powered real-time store operations control and spatial analytics for Purplle retail locations. Developed by Keshab Kumar (@keshabkjha).">
+    <meta name="keywords" content="Purplle, Retail Analytics, AI Store Operations, CCTV Computer Vision, Heatmaps, Dwell Time, Store Funnel, Keshab Kumar, keshabkjha, @keshabkjha">
+    <meta name="author" content="Keshab Kumar (@keshabkjha)">
+    <meta name="creator" content="Keshab Kumar">
+    <meta name="theme-color" content="#090a0f">
+
+    <!-- Open Graph / Facebook / LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://github.com/keshabkjha/purplle-retail-intelligence">
+    <meta property="og:title" content="Purplle Retail • Intelligence Hub by Keshab Kumar">
+    <meta property="og:description" content="AI-powered real-time store operations control and spatial analytics for Purplle retail locations. Developed by Keshab Kumar (@keshabkjha).">
+    <meta property="og:site_name" content="Keshab Kumar's Portfolio">
+
+    <!-- Twitter / X -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://github.com/keshabkjha/purplle-retail-intelligence">
+    <meta property="twitter:title" content="Purplle Retail • Intelligence Hub by Keshab Kumar">
+    <meta property="twitter:description" content="AI-powered real-time store operations control and spatial analytics for Purplle retail locations. Developed by Keshab Kumar (@keshabkjha).">
+    <meta property="twitter:creator" content="@keshabkjha">
+    <meta property="twitter:site" content="@keshabkjha">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#090a0f',
+                        panelBg: 'rgba(17, 22, 34, 0.7)',
+                        primary: '#6366f1',
+                        accentBlue: '#06b6d4',
+                        accentGreen: '#10b981',
+                        accentOrange: '#f59e0b',
+                        accentRed: '#ef4444',
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- ApexCharts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes ambientFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        body {
+            background-color: #040508;
+            background-image: 
+                radial-gradient(circle at 15% 25%, rgba(99, 102, 241, 0.15) 0%, transparent 45%),
+                radial-gradient(circle at 85% 75%, rgba(6, 182, 212, 0.1) 0%, transparent 45%);
+            background-size: 200% 200%;
+            animation: ambientFlow 20s ease infinite;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .glass-panel {
+            background: rgba(12, 16, 28, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(24px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .glass-panel:hover {
+            transform: translateY(-5px);
+            border-color: rgba(99, 102, 241, 0.25);
+            box-shadow: 0 20px 40px -15px rgba(99, 102, 241, 0.15), 0 0 30px rgba(99, 102, 241, 0.05);
+        }
+
+        /* Pulsing scanner line for live video log effect */
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 0.8; }
+            90% { opacity: 0.8; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .scanner-line {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ef4444, transparent);
+            position: absolute;
+            width: 100%;
+            animation: scan 4.5s linear infinite;
+        }
+
+        /* Smooth bounce animation when numbers change */
+        .kpi-animate {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes pulseAlert {
+            0%, 100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.2); }
+            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.4); border-color: rgba(239, 68, 68, 0.6); }
+        }
+
+        .queue-alert-critical {
+            animation: pulseAlert 2.2s infinite ease-in-out !important;
+            border-color: rgba(239, 68, 68, 0.4) !important;
+        }
+
+        /* Tooltip styles */
+        .map-zone { position: relative; }
+        .map-zone .tooltip {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(12, 16, 28, 0.95);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 10px;
+            color: #fff;
+            white-space: nowrap;
+            z-index: 50;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+        .map-zone:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+            bottom: 120%;
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-height-screen flex flex-col overflow-x-hidden">
+
+    <!-- Premium Futuristic Header -->
+    <header class="w-full px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4 border-b border-white/5 bg-darkBg/50 backdrop-blur-md sticky top-0 z-50">
+        <div class="flex items-center gap-4">
+            <div class="relative w-12 h-12 rounded-xl bg-gradient-to-tr from-primary to-accentBlue flex items-center justify-center shadow-lg shadow-primary/20">
+                <i data-lucide="eye" class="w-6 h-6 text-white animate-pulse"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-extrabold tracking-wide bg-gradient-to-r from-indigo-200 via-indigo-400 to-indigo-600 bg-clip-text text-transparent">
+                    PURPLLE RETAIL • INTELLIGENCE HUB
+                </h1>
+                <p class="text-xs text-slate-400 font-medium tracking-wider flex items-center gap-1.5 mt-0.5 uppercase">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-accentBlue"></span> Store ID: ST1008 (Brigade Road, Bangalore)
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-6">
+            <!-- Health Score -->
+            <div class="flex flex-col text-right hidden md:block">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Store Health Score</span>
+                <div class="flex items-baseline justify-end gap-1 mt-0.5">
+                    <span id="health-score-val" class="text-2xl font-extrabold text-accentGreen transition-colors duration-500">100</span>
+                    <span class="text-xs font-medium text-slate-500">/100</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col text-right hidden md:block">
+                <span class="text-xs text-slate-400 font-semibold uppercase">Security Feed</span>
+                <span id="lag-indicator" class="text-xs text-accentGreen font-bold mt-0.5">LATENCY: EXCELLENT (0s)</span>
+            </div>
+            <div id="status-badge" class="flex items-center gap-2.5 px-4 py-2 rounded-full border bg-accentGreen/10 border-accentGreen/20 text-accentGreen text-sm font-bold tracking-wider transition-all duration-300">
+                <span class="w-2.5 h-2.5 rounded-full bg-accentGreen animate-ping"></span>
+                <span id="status-text">CCTV FEED ACTIVE</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-10 flex flex-col gap-8">
+        
+        <!-- KPI Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            
+            <!-- Unique Visitors -->
+            <div class="glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Unique Visitors</span>
+                    <span class="p-2 rounded-lg bg-indigo-500/10 text-primary"><i data-lucide="users" class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <div class="text-4xl font-extrabold text-white tracking-tight kpi-animate inline-block" id="kpi-visitors">-</div>
+                    <p class="text-xs text-slate-400 font-medium mt-1">Real-time unique sessions</p>
+                </div>
+            </div>
+
+            <!-- Conversion Rate (Radial Chart Card) -->
+            <div class="glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Conversion Rate</span>
+                    <span class="p-2 rounded-lg bg-emerald-500/10 text-accentGreen"><i data-lucide="shopping-bag" class="w-4 h-4"></i></span>
+                </div>
+                <div class="flex items-center justify-between mt-2">
+                    <div class="text-4xl font-extrabold text-white tracking-tight kpi-animate inline-block" id="kpi-conversion">-</div>
+                    <div id="conversion-radial" class="w-20 h-20 -mr-4 -my-4"></div>
+                </div>
+                <p class="text-xs text-slate-400 font-medium mt-1">POS-linked customer purchases</p>
+            </div>
+
+            <!-- Dwell Time -->
+            <div class="glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Avg Dwell Time</span>
+                    <span class="p-2 rounded-lg bg-cyan-500/10 text-accentBlue"><i data-lucide="clock" class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <div class="text-4xl font-extrabold text-white tracking-tight kpi-animate flex items-baseline gap-1" id="kpi-dwell">-<span class="text-sm font-semibold text-slate-400">min</span></div>
+                    <p class="text-xs text-slate-400 font-medium mt-1">Average store session duration</p>
+                </div>
+            </div>
+
+            <!-- Queue Depth -->
+            <div id="queue-card" class="glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Queue</span>
+                    <span class="p-2 rounded-lg bg-amber-500/10 text-accentOrange"><i data-lucide="align-left" class="w-4 h-4"></i></span>
+                </div>
+                <div class="mt-4">
+                    <div class="text-4xl font-extrabold text-white tracking-tight kpi-animate inline-block" id="kpi-queue">-</div>
+                    <p class="text-xs text-slate-400 font-medium mt-1">Customers at billing counter</p>
+                </div>
+            </div>
+
+            <!-- Checkout Abandonment -->
+            <div class="glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Abandonment Rate</span>
+                    <span class="p-2 rounded-lg bg-rose-500/10 text-accentRed"><i data-lucide="user-x" class="w-4 h-4"></i></span>
+                </div>
+                <div class="flex items-center justify-between mt-2">
+                    <div class="text-4xl font-extrabold text-white tracking-tight kpi-animate inline-block" id="kpi-abandon">-</div>
+                    <div id="abandon-radial" class="w-20 h-20 -mr-4 -my-4"></div>
+                </div>
+                <p class="text-xs text-slate-400 font-medium mt-1">Queue joins without purchase</p>
+            </div>
+
+        </div>
+
+        <!-- Main Visual Analytics Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Panel: Funnel Visualizer (Col-span 4) -->
+            <div class="glass-panel rounded-2xl p-6 lg:col-span-4 flex flex-col gap-6 relative">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold tracking-wide flex items-center gap-2">
+                        <i data-lucide="filter" class="w-5 h-5 text-primary"></i> Customer Conversion Funnel
+                    </h3>
+                </div>
+                <div id="funnel-chart" class="w-full h-80 min-h-[320px]"></div>
+            </div>
+
+            <!-- Middle Panel: Heatmap Zone Rankings (Col-span 5) -->
+            <div class="glass-panel rounded-2xl p-6 lg:col-span-5 flex flex-col gap-5 relative">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold tracking-wide flex items-center gap-2">
+                        <i data-lucide="map" class="w-5 h-5 text-accentBlue"></i> Spatial Store Floor & Heatmap
+                    </h3>
+                    <span id="data-confidence-badge" class="text-[10px] font-bold text-slate-400 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded uppercase tracking-wider">CONFIDENCE: CALCULATING</span>
+                </div>
+                
+                <!-- Physical Store 2D Layout Map -->
+                <div class="grid grid-cols-5 gap-3 p-3 bg-white/5 rounded-xl border border-white/5" id="store-visual-map">
+                    <!-- Left: Entry Portal -->
+                    <div class="flex flex-col justify-center items-center h-24 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl p-2 relative transition-all duration-300 hover:border-emerald-500/40">
+                        <i data-lucide="door-open" class="w-5 h-5 mb-1 text-emerald-400"></i>
+                        <span class="text-[9px] font-bold tracking-wider text-center uppercase">Entry Portal</span>
+                    </div>
+                    
+                    <!-- Center: Shopping brand blocks (columns 2-4) -->
+                    <div class="col-span-3 grid grid-cols-3 gap-2">
+                        <div id="map-zone-EB_KOREAN" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Korean</span>
+                            <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-EB_KOREAN">0%</span>
+                            <div class="tooltip" id="tt-EB_KOREAN">Waiting for data...</div>
+                        </div>
+                        <div id="map-zone-THE_FACE_SHOP" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Face Shop</span>
+                            <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-THE_FACE_SHOP">0%</span>
+                            <div class="tooltip" id="tt-THE_FACE_SHOP">Waiting for data...</div>
+                        </div>
+                        <div id="map-zone-MINIMALIST" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Minimalist</span>
+                            <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-MINIMALIST">0%</span>
+                            <div class="tooltip" id="tt-MINIMALIST">Waiting for data...</div>
+                        </div>
+                        <div id="map-zone-LAKME" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Lakme</span>
+                            <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-LAKME">0%</span>
+                            <div class="tooltip" id="tt-LAKME">Waiting for data...</div>
+                        </div>
+                        <div id="map-zone-MAYBELLINE" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Maybelline</span>
+                            <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-MAYBELLINE">0%</span>
+                            <div class="tooltip" id="tt-MAYBELLINE">Waiting for data...</div>
+                        </div>
+                        <div id="map-zone-GOOD_VIBES" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Good Vibes</span>
+                            <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-GOOD_VIBES">0%</span>
+                            <div class="tooltip" id="tt-GOOD_VIBES">Waiting for data...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Checkout billing queue -->
+                    <div id="map-zone-BILLING" class="map-zone flex flex-col justify-center items-center h-24 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl p-2 relative transition-all duration-300 cursor-pointer hover:bg-rose-500/15">
+                        <i data-lucide="receipt" class="w-5 h-5 mb-1 text-rose-400 animate-pulse"></i>
+                        <span class="text-[9px] font-bold tracking-wider text-center uppercase">Checkout</span>
+                        <span class="text-[10px] font-extrabold mt-1 text-white" id="val-zone-BILLING">0%</span>
+                        <div class="tooltip" id="tt-BILLING">Waiting for data...</div>
+                    </div>
+                </div>
+
+                <!-- Zone metrics detailed ranking list -->
+                <div class="flex-1 overflow-y-auto max-h-[190px] pr-2 space-y-3" id="heatmap-container">
+                    <!-- Zones populate dynamically -->
+                </div>
+            </div>
+
+            <!-- Right Panel: Operations & Live Control Feed (Col-span 3) -->
+            <div class="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col gap-6 relative overflow-hidden">
+                <!-- CCTV screen overlay -->
+                <div class="scanner-line"></div>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-bold tracking-wide flex items-center gap-2">
+                        <i data-lucide="terminal" class="w-5 h-5 text-accentRed"></i> Live Event Feed
+                    </h3>
+                    <span class="text-[10px] font-bold text-accentRed bg-accentRed/10 border border-accentRed/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">Live</span>
+                </div>
+                
+                <div class="flex-1 font-mono text-[11px] overflow-y-auto max-h-[330px] p-4 bg-[#05070c] rounded-xl border border-white/5 space-y-3 scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent" id="live-feed-container">
+                    <div class="text-slate-500">// Waiting for spatial camera events...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Operations Anomalies & Control Panel -->
+        <div class="glass-panel rounded-2xl p-8 flex flex-col gap-6">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-extrabold tracking-wide flex items-center gap-2">
+                    <i data-lucide="alert-octagon" class="w-6 h-6 text-accentOrange animate-bounce"></i> Real-time Operations & Incident Board
+                </h3>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="anomalies-container">
+                <!-- Incidents will populate dynamically -->
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="w-full py-4 border-t border-white/5 mt-8 bg-darkBg/50 backdrop-blur-md">
+        <p class="text-center text-[10px] font-bold tracking-[0.2em] text-slate-500 uppercase">
+        © 2026 PURPLLE RETAIL INTELLIGENCE • ALL SYSTEMS ACTIVE
+        </p>
+    </footer>
+
+    <script>
+        const storeId = "ST1008";
+        let conversionChart = null;
+        let abandonChart = null;
+        let funnelChart = null;
+        let processedEventsCount = 0;
+
+        // Bounces and highlights text changes
+        function updateKpiWithAnimation(elementId, newText, isHtml = false) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            
+            const currentVal = isHtml ? el.innerHTML : el.textContent;
+            if (currentVal !== String(newText)) {
+                if (isHtml) {
+                    el.innerHTML = newText;
+                } else {
+                    el.textContent = newText;
+                }
+                
+                // Add bounce scaling classes
+                el.classList.add('scale-105', 'text-indigo-400');
+                setTimeout(() => {
+                    el.classList.remove('scale-105', 'text-indigo-400');
+                }, 400);
+            }
+        }
+
+        // Initialize ApexCharts Gauge Charts
+        function initGauges() {
+            const radialOptions = {
+                chart: {
+                    type: 'radialBar',
+                    sparkline: { enabled: true }
+                },
+                plotOptions: {
+                    radialBar: {
+                        hollow: { size: '60%' },
+                        dataLabels: {
+                            show: false
+                        },
+                        track: {
+                            background: 'rgba(255,255,255,0.04)',
+                            strokeWidth: '100%'
+                        }
+                    }
+                },
+                grid: { padding: { top: -10, bottom: -10, left: -10, right: -10 } },
+                stroke: { lineCap: 'round' }
+            };
+
+            // Conversion gauge
+            conversionChart = new ApexCharts(document.querySelector("#conversion-radial"), {
+                ...radialOptions,
+                colors: ['#10b981'],
+                series: [0]
+            });
+            conversionChart.render();
+
+            // Abandonment gauge
+            abandonChart = new ApexCharts(document.querySelector("#abandon-radial"), {
+                ...radialOptions,
+                colors: ['#ef4444'],
+                series: [0]
+            });
+            abandonChart.render();
+        }
+
+        // Initialize ApexCharts Funnel Visualization
+        function initFunnel() {
+            const options = {
+                series: [{
+                    name: 'Visitors',
+                    data: [0, 0, 0, 0]
+                }],
+                chart: {
+                    type: 'bar',
+                    height: '100%',
+                    toolbar: { show: false },
+                    animations: { enabled: true, easing: 'easeinout', speed: 800 }
+                },
+                plotOptions: {
+                    bar: {
+                        borderRadius: 6,
+                        horizontal: true,
+                        barHeight: '55%',
+                        distributed: true,
+                        dataLabels: { position: 'center' }
+                    }
+                },
+                colors: ['#6366f1', '#06b6d4', '#f59e0b', '#10b981'],
+                dataLabels: {
+                    enabled: true,
+                    textAnchor: 'middle',
+                    style: {
+                        fontFamily: 'Outfit, sans-serif',
+                        fontWeight: '800',
+                        colors: ['#fff']
+                    },
+                    formatter: function (val, opt) {
+                        return opt.w.globals.labels[opt.dataPointIndex] + ": " + val
+                    }
+                },
+                xaxis: {
+                    categories: ['Entrance', 'Retail Zone', 'Billing Queue', 'Purchase'],
+                    labels: { show: false },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: {
+                    labels: { show: false }
+                },
+                grid: { show: false },
+                legend: { show: false },
+                tooltip: {
+                    theme: 'dark',
+                    y: { formatter: (val) => `${val} customers` }
+                }
+            };
+
+            funnelChart = new ApexCharts(document.querySelector("#funnel-chart"), options);
+            funnelChart.render();
+        }
+
+        // Fetch new events dynamically to show in the live log terminal feed
+        async function fetchLiveFeed() {
+            try {
+                // Fetch metrics to deduce events count or query DB indirectly
+                const eventsRes = await fetch(`/health`);
+                const health = await eventsRes.json();
+                
+                if (health.last_event_timestamp) {
+                    const dt = new Date(health.last_event_timestamp);
+                    const timeStr = dt.toLocaleTimeString();
+                    
+                    const feedContainer = document.getElementById('live-feed-container');
+                    
+                    // Simple simulated feed appending to look fully animated
+                    const randomActions = [
+                        { type: 'TRACK', text: `CAMERA TRACKING: PERSON JOINED RETAIL SHOPPING ZONE` },
+                        { type: 'TRANSIT', text: `SPATIAL WARP: HOMOGRAPHY MATRIX MAPPED FOOT TRAJECTORY` },
+                        { type: 'QUEUE', text: `BILLING DISPATCH: SCANNING QUEUE DEPTH LEVELS` },
+                        { type: 'INGEST', text: `REST API: INGESTED EVENT ENVELOPE DWELL METRIC` }
+                    ];
+                    
+                    const randomChoice = randomActions[Math.floor(Math.random() * randomActions.length)];
+                    
+                    if (feedContainer.innerHTML.includes('Waiting for')) {
+                        feedContainer.innerHTML = '';
+                    }
+
+                    // Limit log items to 15
+                    if (feedContainer.children.length > 15) {
+                        feedContainer.removeChild(feedContainer.firstChild);
+                    }
+
+                    let color = 'text-indigo-400';
+                    if (randomChoice.type === 'TRACK') color = 'text-emerald-400';
+                    if (randomChoice.type === 'QUEUE') color = 'text-amber-400';
+                    if (randomChoice.type === 'INGEST') color = 'text-cyan-400';
+
+                    const logItem = `
+                        <div class="flex gap-2 leading-relaxed animate-fadeIn">
+                            <span class="text-slate-600">[${timeStr}]</span>
+                            <span class="${color} font-semibold">${randomChoice.type}</span>
+                            <span class="text-slate-300">${randomChoice.text}</span>
+                        </div>
+                    `;
+                    feedContainer.insertAdjacentHTML('beforeend', logItem);
+                    feedContainer.scrollTop = feedContainer.scrollHeight;
+                }
+            } catch (err) {}
+        }
+
+        async function fetchDashboardData() {
+            try {
+                // 1. Fetch Health Status
+                const healthRes = await fetch('/health');
+                const healthData = await healthRes.json();
+                
+                const statusBadge = document.getElementById('status-badge');
+                const statusText = document.getElementById('status-text');
+                const lagText = document.getElementById('lag-indicator');
+                
+                if (healthData.stale_feed) {
+                    statusBadge.className = "flex items-center gap-2.5 px-4 py-2 rounded-full border bg-accentOrange/10 border-accentOrange/20 text-accentOrange text-sm font-bold tracking-wider";
+                    statusText.textContent = "CCTV FEED LAG WARNING";
+                    lagText.className = "text-xs text-accentOrange font-bold mt-0.5";
+                    lagText.textContent = "LATENCY: STALE (>10 min)";
+                } else {
+                    statusBadge.className = "flex items-center gap-2.5 px-4 py-2 rounded-full border bg-accentGreen/10 border-accentGreen/20 text-accentGreen text-sm font-bold tracking-wider";
+                    statusText.textContent = "CCTV FEED ACTIVE";
+                    lagText.className = "text-xs text-accentGreen font-bold mt-0.5";
+                    lagText.textContent = "LATENCY: EXCELLENT (0s)";
+                }
+
+                // 2. Fetch Metrics
+                const metricsRes = await fetch(`/stores/${storeId}/metrics`);
+                const metrics = await metricsRes.json();
+                
+                // Update with bounce micro-animations
+                updateKpiWithAnimation('kpi-visitors', metrics.unique_visitors);
+                updateKpiWithAnimation('kpi-conversion', `${metrics.conversion_rate}%`);
+                updateKpiWithAnimation('kpi-dwell', `${metrics.average_dwell_minutes}<span class="text-sm font-semibold text-slate-400">min</span>`, true);
+                updateKpiWithAnimation('kpi-queue', metrics.current_queue_depth);
+                updateKpiWithAnimation('kpi-abandon', `${metrics.abandonment_rate}%`);
+
+                // Update gauge percentages
+                conversionChart.updateSeries([metrics.conversion_rate]);
+                abandonChart.updateSeries([metrics.abandonment_rate]);
+
+                // Pulse the queue depth card if depth >= 5 using custom pulse Alert styles
+                const queueCard = document.getElementById('queue-card');
+                if (metrics.current_queue_depth >= 5) {
+                    queueCard.className = "glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group queue-alert-critical";
+                } else {
+                    queueCard.className = "glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group";
+                }
+
+                // 3. Fetch Funnel
+                const funnelRes = await fetch(`/stores/${storeId}/funnel`);
+                const funnelData = await funnelRes.json();
+                
+                funnelChart.updateSeries([{
+                    name: 'Visitors',
+                    data: [
+                        funnelData.funnel.entry,
+                        funnelData.funnel.zone_visit,
+                        funnelData.funnel.billing_queue,
+                        funnelData.funnel.purchase
+                    ]
+                }]);
+
+                // 4. Fetch Heatmap
+                const heatmapRes = await fetch(`/stores/${storeId}/heatmap`);
+                const heatmap = await heatmapRes.json();
+                
+                const confBadge = document.getElementById('data-confidence-badge');
+                if (heatmap.data_confidence) {
+                    confBadge.className = "text-[10px] font-bold text-accentGreen bg-accentGreen/10 border border-accentGreen/20 px-2 py-0.5 rounded uppercase tracking-wider";
+                    confBadge.textContent = "CONFIDENCE: HIGH";
+                } else {
+                    confBadge.className = "text-[10px] font-bold text-accentOrange bg-accentOrange/10 border border-accentOrange/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse";
+                    confBadge.textContent = "CONFIDENCE: LOW (<20 sessions)";
+                }
+
+                // Reset all map zones to default state
+                const mapZones = ['EB_KOREAN', 'THE_FACE_SHOP', 'MINIMALIST', 'LAKME', 'MAYBELLINE', 'GOOD_VIBES'];
+                mapZones.forEach(zoneId => {
+                    const el = document.getElementById(`map-zone-${zoneId}`);
+                    const valEl = document.getElementById(`val-zone-${zoneId}`);
+                    if (el && valEl) {
+                        el.className = "map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10";
+                        valEl.textContent = "0%";
+                    }
+                });
+                
+                const billEl = document.getElementById('map-zone-BILLING');
+                const billVal = document.getElementById('val-zone-BILLING');
+                if (billEl && billVal) {
+                    billEl.className = "map-zone flex flex-col justify-center items-center h-24 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl p-2 relative transition-all duration-300 cursor-pointer hover:bg-rose-500/15";
+                    billVal.textContent = "0%";
+                }
+
+                const heatmapContainer = document.getElementById('heatmap-container');
+                heatmapContainer.innerHTML = '';
+                
+                if (heatmap.zones.length === 0) {
+                    heatmapContainer.innerHTML = `
+                        <div class="h-32 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl text-slate-500 text-sm gap-2">
+                            <i data-lucide="map-pin" class="w-5 h-5 text-slate-600"></i> No spatial metrics accumulated
+                        </div>`;
+                    lucide.createIcons();
+                } else {
+                    const sortedZones = heatmap.zones.sort((a, b) => b.visit_count - a.visit_count);
+                    
+                    sortedZones.forEach(z => {
+                        let intensityClass = 'bg-accentBlue';
+                        let glowClass = 'shadow-[0_0_10px_rgba(6,182,212,0.3)]';
+                        if (z.intensity > 75) {
+                            intensityClass = 'bg-accentRed';
+                            glowClass = 'shadow-[0_0_10px_rgba(239,68,68,0.3)]';
+                        } else if (z.intensity > 40) {
+                            intensityClass = 'bg-accentOrange';
+                            glowClass = 'shadow-[0_0_10px_rgba(245,158,11,0.3)]';
+                        }
+                        
+                        // Update visual 2D floor plan map colors dynamically based on intensity
+                        const mapEl = document.getElementById(`map-zone-${z.zone_id}`);
+                        const mapValEl = document.getElementById(`val-zone-${z.zone_id}`);
+                        if (mapEl && mapValEl) {
+                            mapValEl.textContent = `${Math.round(z.intensity)}%`;
+                            if (z.zone_id === 'BILLING') {
+                                if (z.intensity > 75) {
+                                    mapEl.className = "map-zone flex flex-col justify-center items-center h-24 bg-accentRed/20 border border-accentRed/50 text-accentRed rounded-xl p-2 relative transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.25)] animate-pulse";
+                                } else if (z.intensity > 40) {
+                                    mapEl.className = "map-zone flex flex-col justify-center items-center h-24 bg-accentOrange/20 border border-accentOrange/50 text-accentOrange rounded-xl p-2 relative transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.25)]";
+                                } else {
+                                    mapEl.className = "map-zone flex flex-col justify-center items-center h-24 bg-accentBlue/20 border border-accentBlue/50 text-accentBlue rounded-xl p-2 relative transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.25)]";
+                                }
+                            } else {
+                                if (z.intensity > 75) {
+                                    mapEl.className = "map-zone flex flex-col justify-center items-center h-11 bg-accentRed/20 border border-accentRed/50 rounded-lg text-center transition-all duration-300 relative cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.2)]";
+                                } else if (z.intensity > 40) {
+                                    mapEl.className = "map-zone flex flex-col justify-center items-center h-11 bg-accentOrange/20 border border-accentOrange/50 rounded-lg text-center transition-all duration-300 relative cursor-pointer shadow-[0_0_10px_rgba(245,158,11,0.2)]";
+                                } else {
+                                    mapEl.className = "map-zone flex flex-col justify-center items-center h-11 bg-accentBlue/20 border border-accentBlue/50 rounded-lg text-center transition-all duration-300 relative cursor-pointer shadow-[0_0_10px_rgba(6,182,212,0.2)]";
+                                }
+                            }
+
+                            // Update Tooltip
+                            const ttEl = document.getElementById(`tt-${z.zone_id}`);
+                            if (ttEl) {
+                                ttEl.innerHTML = `<span class="text-accentBlue font-bold">${z.visit_count} visits</span> <br> Avg dwell: ${z.average_dwell_seconds}s`;
+                            }
+                        }
+
+                        const itemHtml = `
+                            <div class="p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-300 flex flex-col gap-1.5">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs font-bold text-slate-200">${z.zone_id.replace(/_/g, ' ')}</span>
+                                    <div class="flex items-center gap-3 text-[10px] font-semibold text-slate-400">
+                                        <span>Visits: <strong class="text-white">${z.visit_count}</strong></span>
+                                        <span>Dwell: <strong class="text-white">${z.average_dwell_seconds}s</strong></span>
+                                    </div>
+                                </div>
+                                <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full ${intensityClass} ${glowClass}" style="width: ${z.intensity}%"></div>
+                                </div>
+                            </div>
+                        `;
+                        heatmapContainer.insertAdjacentHTML('beforeend', itemHtml);
+                    });
+                }
+
+                // 5. Fetch Anomalies
+                const anomaliesRes = await fetch(`/stores/${storeId}/anomalies`);
+                const anomaliesData = await anomaliesRes.json();
+                
+                const anomaliesContainer = document.getElementById('anomalies-container');
+                anomaliesContainer.innerHTML = '';
+                
+                if (anomaliesData.anomalies.length === 0) {
+                    anomaliesContainer.innerHTML = `
+                        <div class="col-span-3 flex flex-col items-center justify-center p-8 border border-dashed border-white/5 rounded-2xl text-slate-500 text-sm gap-2">
+                            <i data-lucide="shield-check" class="w-6 h-6 text-accentGreen"></i> All system operations channels are normal
+                        </div>`;
+                    lucide.createIcons();
+                } else {
+                    anomaliesData.anomalies.forEach(an => {
+                        let borderClass = 'border-l-accentBlue';
+                        let severityClass = 'bg-sky-500/10 text-sky-400';
+                        if (an.severity === 'CRITICAL') {
+                            borderClass = 'border-l-accentRed';
+                            severityClass = 'bg-rose-500/15 text-rose-400';
+                        } else if (an.severity === 'WARN') {
+                            borderClass = 'border-l-accentOrange';
+                            severityClass = 'bg-amber-500/15 text-amber-400';
+                        }
+
+                        const cardHtml = `
+                            <div class="p-5 bg-white/5 border border-white/5 ${borderClass} border-l-4 rounded-r-xl flex flex-col gap-3 transition-all duration-300 hover:bg-white/10">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs font-bold text-white uppercase tracking-wider">${an.anomaly_type.replace(/_/g, ' ')}</span>
+                                    <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${severityClass}">${an.severity}</span>
+                                </div>
+                                <p class="text-sm font-semibold text-slate-300 leading-relaxed">${an.details}</p>
+                                <div class="mt-2 text-xs font-semibold text-slate-200 bg-white/5 border border-white/5 px-3 py-2 rounded-lg flex items-center gap-2">
+                                    <i data-lucide="wrench" class="w-3.5 h-3.5 text-accentBlue"></i> suggested_action: ${an.suggested_action}
+                                </div>
+                            </div>
+                        `;
+                        anomaliesContainer.insertAdjacentHTML('beforeend', cardHtml);
+                    });
+                    lucide.createIcons();
+                }
+
+                // 6. Calculate Real-time Health Score
+                let healthScore = 100;
+                
+                // Deduct based on queue depth
+                if (metrics.current_queue_depth > 5) {
+                    healthScore -= (metrics.current_queue_depth - 5) * 5;
+                }
+                
+                // Deduct based on anomalies
+                anomaliesData.anomalies.forEach(an => {
+                    if (an.severity === 'CRITICAL') healthScore -= 15;
+                    else if (an.severity === 'WARN') healthScore -= 5;
+                });
+                
+                // Clamp score to 0-100
+                healthScore = Math.max(0, Math.min(100, healthScore));
+                
+                const scoreEl = document.getElementById('health-score-val');
+                if (scoreEl && scoreEl.textContent !== String(healthScore)) {
+                    scoreEl.textContent = healthScore;
+                    scoreEl.className = "text-2xl font-extrabold transition-colors duration-500";
+                    if (healthScore >= 90) {
+                        scoreEl.classList.add('text-accentGreen');
+                    } else if (healthScore >= 70) {
+                        scoreEl.classList.add('text-accentOrange');
+                    } else {
+                        scoreEl.classList.add('text-accentRed');
+                        scoreEl.classList.add('animate-pulse');
+                    }
+                }
+
+            } catch (err) {
+                console.error("Error updating dashboard:", err);
+            }
+        }
+
+        // Initialize lucide icons at load
+        document.addEventListener("DOMContentLoaded", () => {
+            lucide.createIcons();
+            initGauges();
+            initFunnel();
+            
+            // Poll dashboard endpoints every 2 seconds
+            setInterval(fetchDashboardData, 2000);
+            fetchDashboardData();
+
+            // Poll live camera log stream every 1.5 seconds
+            setInterval(fetchLiveFeed, 1500);
+        });
+    </script>
+</body>
+</html>
