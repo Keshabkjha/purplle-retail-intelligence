@@ -10,7 +10,7 @@
   <a href="https://github.com/keshabkjha/purplle-retail-intelligence/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-12%20passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://fastapi.tiangolo.com"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white"></a>
-  <a href="https://docs.ultralytics.com"><img alt="YOLOv8" src="https://img.shields.io/badge/YOLOv8-Ultralytics-FF6B35?style=for-the-badge&logo=pytorch&logoColor=white"></a>
+  <a href="https://docs.ultralytics.com"><img alt="YOLO11" src="https://img.shields.io/badge/YOLO11-Ultralytics-FF6B35?style=for-the-badge&logo=pytorch&logoColor=white"></a>
   <a href="https://docs.docker.com/compose/"><img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-purple?style=for-the-badge"></a>
 </p>
@@ -37,7 +37,7 @@ Purplle's physical stores were a complete analytics blind spot. This system solv
 
 | Capability | Description |
 |---|---|
-| 🎥 **Person Tracking** | YOLOv8 + ByteTrack identifies and tracks individuals across multi-camera store footage |
+| 🎥 **Person Tracking** | YOLO11n + ByteTrack identifies and tracks individuals across multi-camera store footage |
 | 📐 **Spatial Mapping** | Homography perspective warp maps camera foot-positions to a 2D store floor plan |
 | ⚡ **Real-time Ingestion** | Structured events posted to FastAPI REST endpoint at sub-100ms latency |
 | 📊 **KPI Aggregation** | Conversion rate, dwell time per zone, queue depth, abandonment rate |
@@ -57,7 +57,7 @@ The system uses a **decoupled, event-driven architecture** that cleanly separate
 ```mermaid
 graph TD
     A[📹 CCTV Camera Feeds] --> B[pipeline/detect.py]
-    B --> C{YOLOv8 + ByteTrack\nPerson Detection}
+    B --> C{YOLO11n + ByteTrack\nPerson Detection}
     C --> D[Homography Warp\nFloor Plan Mapping]
     D --> E{Point-in-Polygon\nZone Assignment}
     E --> F[Structured JSON Events\nENTRY / ZONE_ENTER / ZONE_DWELL\nZONE_EXIT / EXIT / REENTRY\nBILLING_QUEUE_JOIN / ABANDON]
@@ -73,7 +73,7 @@ graph TD
 ```
 purplle-retail-intelligence/
 ├── pipeline/
-│   ├── detect.py          # YOLOv8 tracker → structured event emitter
+│   ├── detect.py          # YOLO11n tracker → structured event emitter
 │   ├── calibrate.py       # Interactive homography calibration tool
 │   └── run.sh             # Multi-camera parallel pipeline launcher
 ├── app/
@@ -250,7 +250,7 @@ All events posted to `POST /events/ingest` must conform to this schema:
 ```mermaid
 sequenceDiagram
     participant V as Video Frame
-    participant Y as YOLOv8 Tracker
+    participant Y as YOLO11n Tracker
     participant H as Homography Mapper
     participant Z as Zone Checker
     participant SM as Session Manager
@@ -321,7 +321,7 @@ flowchart LR
 
 | Layer | Technology | Rationale |
 |---|---|---|
-| **Object Detection** | YOLOv8n (Ultralytics) | Best accuracy/speed tradeoff on CPU hardware |
+| **Object Detection** | YOLO11n (Ultralytics) | 22% fewer params than v8, same API, better CPU efficiency |
 | **Object Tracking** | ByteTrack (built-in) | Low-ID-switch rate for persistent session tracking |
 | **Spatial Mapping** | OpenCV Homography | Perspective-correct floor projection from camera |
 | **Zone Logic** | Pure Python Ray Casting | Zero native dependencies vs. Shapely/GEOS |

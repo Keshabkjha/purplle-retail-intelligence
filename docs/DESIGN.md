@@ -24,7 +24,7 @@ This system converts existing CCTV infrastructure into a real-time intelligence 
 ```mermaid
 graph TB
     subgraph CV["🎥 Computer Vision Pipeline (pipeline/)"]
-        A[CCTV Video Clips\nMultiple Cameras] --> B[YOLOv8n\nPerson Detection]
+        A[CCTV Video Clips\nMultiple Cameras] --> B[YOLO11n\nPerson Detection]
         B --> C[ByteTrack\nPersistent Session Tracking]
         C --> D[Homography Warp\nCamera → Floor Plan]
         D --> E[Ray Casting\nPoint-in-Polygon Zone Check]
@@ -64,7 +64,7 @@ sequenceDiagram
 
     loop Every video frame (throttled @ every 15th frame)
         CAM->>DET: Video frame
-        DET->>DET: YOLOv8 detect + ByteTrack IDs
+        DET->>DET: YOLO11n detect + ByteTrack IDs
         DET->>DET: Homography warp foot position
         DET->>DET: Ray cast → zone_id
 
@@ -187,11 +187,11 @@ flowchart LR
 
 | Model | Released | Params | CPU Speed | GPU Req. | ByteTrack API | Selected |
 |---|---|---|---|---|---|---|
-| YOLOv8n | Jan 2023 | 3.2M | ~6ms/frame ✅ | No | Native, stable | ✅ |
-| YOLO11n | Oct 2024 | 2.6M | ~5ms/frame ✅ | No | Native, stable | —  |
+| YOLOv8n | Jan 2023 | 3.2M | ~6ms/frame | No | Native, stable | — |
+| **YOLO11n** | Oct 2024 | 2.6M | ~5ms/frame ✅ | No | Native, stable | ✅ |
 | YOLOv12n | Feb 2025 | 6.5M | ~18ms/frame ⚠️ | Flash Attn | Changed API | ❌ |
 
-**Context:** Multiple newer YOLO versions exist beyond v8. The system deliberately uses `yolov8n.pt`.
+**Context:** The system was initially built with YOLOv8n and has been upgraded to YOLO11n — Ultralytics' latest stable release with 22% fewer parameters, same drop-in API, and better CPU efficiency.
 
 **Why YOLOv8, not v11 or v12:**
 
@@ -209,7 +209,7 @@ flowchart LR
 model = YOLO("yolo11n.pt")  # Drop-in replacement for yolov8n.pt
 ```
 
-**Decision**: YOLOv8n is the correct choice for the hackathon scope (CPU, local inference, stable tracking). YOLO11 is the recommended upgrade for production deployment.
+**Decision**: Upgraded to YOLO11n — same drop-in API as v8, 22% fewer parameters (2.6M vs 3.2M), and marginally faster CPU inference (~5ms vs ~6ms/frame). YOLO12 remains excluded due to GPU-only Flash Attention requirements.
 
 ---
 

@@ -180,8 +180,8 @@ def post_event(event):
     except Exception as e:
         print(f"Connection error to ingest API: {e}")
 
-def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
-    print(f"Initializing YOLO model: {model_path}")
+def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
+    print(f"Initializing YOLO11 model: {model_path}")
     model = YOLO(model_path)
 
     if not os.path.exists(video_path):
