@@ -1,61 +1,282 @@
-# Store Intelligence System Architecture Design (DESIGN.md)
+# System Architecture & Design — Purplle Retail Intelligence Hub
 
-Apex Retail operates 40 physical stores across 8 cities. While their online channels benefit from mature, real-time analytics, physical brick-and-mortar stores have remained a critical blind spot. This Store Intelligence System addresses this by converting raw security CCTV footage into actionable, offline business intelligence metrics in real-time.
-
----
-
-## 1. System Architecture Overview
-
-The system is designed with a decoupled, event-driven architecture, cleanly dividing the resource-heavy computer vision detection layer from the fast, consumer-facing REST API layer.
-
-```
-       📹 [CCTV Video Clips] 
-                 │
-                 ▼  (pipeline/detect.py)
-       🔍 [YOLOv8 + ByteTrack] 
-                 │
-                 ▼  (Perspective Warp & Zone Checking)
-       ⚡ [Structured JSON Events]
-                 │
-                 ▼  (POST /events/ingest)
-       🧠 [FastAPI Web Server] (app/main.py)
-                 │
-                 ├─────────────────────────┐
-                 ▼                         ▼
-         [(SQLite DB)]              📊 [Live Dashboard]
-     (store_intelligence.db)
-```
-
-### Components
-
-1. **Computer Vision & Spatial Mapping Layer (`/pipeline`)**:
-   - **Person Detection & Tracking**: Utilizes YOLOv8 (specifically `yolov8n.pt` for optimal CPU performance during local execution) combined with ByteTrack for real-time person detection and session-aware trajectory tracking.
-   - **Homography Perspective Warp**: Maps camera bounding-box foot positions (bottom-center of bounding boxes) to precise coordinates on a 2D store floor plan using calculated projective transformation matrices.
-   - **Spatial Zone Checker**: Executes an optimized Ray Casting point-in-polygon algorithm to check which logical store zones (e.g. `EB_KOREAN`, `BILLING`) contain the visitor's warped coordinates.
-   - **State Machine & Ingest Client**: Maintains visitor session lifecycles to emit structured behavioral events (`ENTRY`, `EXIT`, `ZONE_ENTER`, `ZONE_EXIT`, `ZONE_DWELL`, `BILLING_QUEUE_JOIN`) and posts them directly to the FastAPI server.
-
-2. **Analytics REST API (`/app`)**:
-   - **Data Store**: Uses a lightweight, high-performance SQLite engine configured with composite indexing for sub-millisecond query response times.
-   - **Aggregator Modules**: Computes real-time store-level KPIs, multi-stage conversion funnels, dwell-time heatmaps, and rule-based operational anomalies dynamically from raw events and POS transaction logs.
-   - **Structured Logging Middleware**: Injects a unique `trace_id` per request and outputs JSON logs recording request latency, endpoints, status codes, and database payload sizes.
+> **Author:** Keshab Kumar ([@keshabkjha](https://github.com/keshabkjha))  
+> **Project:** Purplle Tech Challenge 2026 — Round 2  
+> **Store:** Brigade Road, Bangalore (ID: `ST1008`)
 
 ---
 
-## 2. AI-Assisted Decisions
+## 1. Problem Statement
 
-During the development process, an LLM was actively used to brainstorm architectural patterns, evaluate library overhead, and sanity-check edge-case algorithms.
+Purplle's 40+ physical stores generated zero structured behavioral data. While the e-commerce platform had mature analytics (funnel tracking, A/B tests, heatmaps), the physical stores were a complete blind spot. Store managers had no data-driven answers to:
 
-### Decision 1: Spatial Zone Checking Library vs. Pure Python
-- **Context**: Selecting how to run point-in-polygon tests on warped coordinates.
-- **LLM Proposal**: The LLM suggested using `shapely.geometry.Polygon` for robust spatial geometry calculations.
-- **Our Action (Override)**: While `shapely` is clean, it introduces heavy native C-library dependencies (`GEOS`), which often fail or slow down during Docker container compilation on various developer operating systems. Instead, we implemented a pure Python Ray Casting algorithm for point-in-polygon checks. It has zero external dependencies, compiles instantly, and runs with negligible latency.
+- **How many unique customers** entered today vs. last week?
+- **Which product zones** are dead spots that attract no browsing?
+- **When does the billing queue** get so long that customers abandon it?
+- **What is the true in-store conversion rate** vs. the POS transaction count?
 
-### Decision 2: In-Memory SQLite Testing connection overrides
-- **Context**: Structuring the pytest database fixture to test FastAPI endpoints concurrently.
-- **LLM Proposal**: The LLM suggested standard in-memory connection URLs: `sqlite:///:memory:`.
-- **Our Action (Refinement)**: During implementation, standard connection pooling in SQLAlchemy spawned multiple separate connections, each getting a distinct in-memory SQLite sandbox, which caused mock data table missing errors. We refined the LLM's design by introducing SQLAlchemy's `StaticPool` to enforce a single, persistent connection shared across all API calls in test environments.
+This system converts existing CCTV infrastructure into a real-time intelligence sensor network — requiring **zero hardware changes** and **zero customer opt-in**.
 
-### Decision 3: POS Transaction Customer Correlation
-- **Context**: Matching anonymous transaction records in POS CSV with camera visitor sessions.
-- **LLM Proposal**: The LLM suggested building a probabilistic matching algorithm using billing exit timestamps and order values.
-- **Our Action (Agreed)**: We agreed with the LLM's recommendation to use a 5-minute pre-transaction correlation window matching store layouts, which is the industry standard for matching transaction systems with spatial camera tracking.
+---
+
+## 2. High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph CV["🎥 Computer Vision Pipeline (pipeline/)"]
+        A[CCTV Video Clips\nMultiple Cameras] --> B[YOLOv8n\nPerson Detection]
+        B --> C[ByteTrack\nPersistent Session Tracking]
+        C --> D[Homography Warp\nCamera → Floor Plan]
+        D --> E[Ray Casting\nPoint-in-Polygon Zone Check]
+        E --> F[Session State Machine\nvisitor lifecycle tracking]
+    end
+
+    subgraph EVENTS["⚡ Structured Event Stream"]
+        F --> G[ENTRY / REENTRY\nZONE_ENTER / ZONE_EXIT\nZONE_DWELL / EXIT\nBILLING_QUEUE_JOIN\nBILLING_QUEUE_ABANDON]
+    end
+
+    subgraph API["🧠 Analytics API (app/)"]
+        G -->|POST /events/ingest| H[FastAPI Server\napp/main.py]
+        H --> I[(SQLite\nstore_intelligence.db)]
+        J[POS Transactions CSV] -->|Seeded at startup| I
+        I --> K[metrics.py\nKPI Aggregation]
+        I --> L[funnel.py\nConversion Funnel]
+        I --> M[heatmap.py\nZone Intensity]
+        I --> N[anomalies.py\nAnomaly Detection]
+    end
+
+    subgraph UI["📊 Live Dashboard"]
+        K & L & M & N --> O[GET /dashboard\nReal-time Operations UI\nPolls every 2 seconds]
+    end
+```
+
+---
+
+## 3. Data Flow Sequence
+
+```mermaid
+sequenceDiagram
+    participant CAM as CCTV Camera
+    participant DET as detect.py
+    participant API as FastAPI
+    participant DB as SQLite DB
+    participant DASH as Dashboard
+
+    loop Every video frame (throttled @ every 15th frame)
+        CAM->>DET: Video frame
+        DET->>DET: YOLOv8 detect + ByteTrack IDs
+        DET->>DET: Homography warp foot position
+        DET->>DET: Ray cast → zone_id
+
+        alt First appearance
+            DET->>API: POST ENTRY (new visitor)
+        end
+        alt Previously exited
+            DET->>API: POST REENTRY
+        end
+        alt Zone changed from BILLING to non-exit
+            DET->>API: POST BILLING_QUEUE_ABANDON
+        end
+        alt Zone changed
+            DET->>API: POST ZONE_EXIT + ZONE_ENTER
+        end
+        alt Same zone, 30s elapsed
+            DET->>API: POST ZONE_DWELL
+        end
+        alt Track lost > 15 seconds
+            DET->>API: POST EXIT
+        end
+
+        API->>DB: INSERT events (idempotent via event_id)
+    end
+
+    loop Every 2 seconds
+        DASH->>API: GET /stores/ST1008/metrics
+        DASH->>API: GET /stores/ST1008/funnel
+        DASH->>API: GET /stores/ST1008/heatmap
+        DASH->>API: GET /stores/ST1008/anomalies
+        API->>DB: SQL aggregation queries
+        API->>DASH: JSON response
+        DASH->>DASH: Animate KPI cards + heatmap
+    end
+```
+
+---
+
+## 4. Spatial Mapping Pipeline
+
+The core technical challenge: mapping a 2D bounding box in camera pixel coordinates to a logical store zone on a 2D floor plan.
+
+```
+Camera Frame (1920 × 1080 px)         Store Floor Plan (940 × 451 px)
+┌───────────────────────────┐          ┌────────────────────┐
+│                           │          │  ENTRY │ KOREAN │  │
+│   [Person BBox]           │  ─────►  │        │        │  │
+│   foot @ (px, py)         │ WARP     │  LAKME │ BILLING│  │
+│                           │          └────────────────────┘
+└───────────────────────────┘
+         │
+         ▼
+   Homography Matrix H
+   (4-point correspondence)
+         │
+         ▼
+   cv2.perspectiveTransform()
+         │
+         ▼
+   Floor coordinates (wx, wy)
+         │
+         ▼
+   Ray Casting: point_in_polygon(wx, wy, zone_polygon)
+         │
+         ▼
+   zone_id = "EB_KOREAN" | "BILLING" | None
+```
+
+**Calibration**: 4 corresponding real-world points are clicked in both the camera frame and the floor plan image using `pipeline/calibrate.py`. OpenCV calculates the 3×3 homography matrix `H`.  
+**Fallback**: If no calibration exists for a camera, a proportional linear scaling matrix is used.
+
+---
+
+## 5. Staff Detection Algorithm
+
+Staff members wear identifiable dark uniforms. The detector uses HSV color analysis:
+
+```
+1. Crop the top 50% of bounding box (upper torso region)
+2. Convert BGR frame to HSV color space
+3. Apply color mask for dark tones:
+   lower_black = [0,   0,   0  ]
+   upper_black = [180, 255, 50 ]
+4. Calculate: match_ratio = masked_pixels / total_torso_pixels
+5. If match_ratio > 30% → classify as STAFF → exclude from all metrics
+```
+
+Staff visitors are tagged with `is_staff=True` in all their events and **filtered out** at the database query level in every metric, funnel, and heatmap calculation.
+
+---
+
+## 6. Metric Calculation Logic
+
+### 6.1 Conversion Rate
+
+```mermaid
+flowchart LR
+    A[All Events\nis_staff=False] --> B[Group by visitor_id]
+    B --> C{Did visitor\nvisit BILLING\nzone?}
+    C -->|Yes| D{Is there a POS\ntransaction within\n5 min of billing visit?}
+    C -->|No| E[Not Converted]
+    D -->|Yes| F[✅ Converted Visitor]
+    D -->|No| G[❌ Not Converted]
+    F --> H[Conversion Rate =\nConverted ÷ Total Visitors × 100]
+```
+
+### 6.2 Anomaly Detection Windows
+
+| Anomaly | Data Window | Method |
+|---|---|---|
+| Queue Spike | All historical `BILLING_QUEUE_JOIN` events | Statistical: depth > μ + 1.5σ |
+| Conversion Drop | **Last 7 days** of events + POS transactions | Comparison to 7-day rolling baseline |
+| Dead Zone | **Last 30 minutes** of events | Zero visits to retail zones |
+
+---
+
+## 7. Engineering Decisions (AI-Assisted)
+
+### Decision 1: Zone Detection — Shapely vs. Pure Python Ray Casting
+
+| Option | Pros | Cons | Selected |
+|---|---|---|---|
+| `shapely.geometry` | Clean API, robust edge cases | Heavy GEOS native dependency, Docker compile failures | ❌ |
+| Pure Python Ray Casting | Zero deps, instant Docker build | Manual implementation | ✅ |
+
+**Rationale:** Shapely's underlying GEOS C library frequently causes `pip install` failures in Alpine Linux Docker containers. The pure Python Ray Casting algorithm is O(n) on polygon vertices and adds negligible latency for the small zone polygons in this store layout.
+
+### Decision 2: SQLite vs. PostgreSQL
+
+| Option | Pros | Cons | Selected |
+|---|---|---|---|
+| PostgreSQL | Production-grade, JSON operators | Requires separate container, complex setup | ❌ |
+| SQLite + SQLAlchemy | Zero-config, single file, fast reads | No concurrent writes, limited scale | ✅ |
+
+**Rationale:** For a hackathon evaluation with a single store and ~2,000 events/day, SQLite provides adequate performance. The SQLAlchemy ORM abstraction means migrating to PostgreSQL for production would require only a connection string change.
+
+### Decision 3: POS Correlation — Probabilistic vs. Time Window
+
+| Option | Pros | Cons | Selected |
+|---|---|---|---|
+| Probabilistic ML matching | More accurate | Requires labeled training data | ❌ |
+| 5-minute time window | Deterministic, explainable | Some false positives | ✅ |
+
+**Rationale:** The 5-minute correlation window (billing zone visit → POS transaction) is the industry standard for brick-and-mortar analytics systems and requires no labeled training data.
+
+### Decision 4: In-Memory Test Isolation — Standard vs. StaticPool
+
+| Option | Pros | Cons | Selected |
+|---|---|---|---|
+| Standard `sqlite:///:memory:` | Simple | Each connection gets separate DB; tables disappear between test calls | ❌ |
+| `StaticPool` + `check_same_thread=False` | Single persistent connection shared across TestClient calls | Slightly non-standard | ✅ |
+
+---
+
+## 8. API Middleware Stack
+
+```
+HTTP Request
+    │
+    ▼
+[CORS Middleware]
+Allows all origins for hackathon cross-origin dashboard access
+    │
+    ▼
+[Structured Logging Middleware]
+Injects trace_id, records latency_ms, event_count, status_code to stdout as JSON
+    │
+    ▼
+[FastAPI Route Handler]
+Validates Pydantic schema → SQLAlchemy query → JSON response
+    │
+    ▼
+HTTP Response
+```
+
+---
+
+## 9. Database Schema
+
+```sql
+-- Events table (core sensor data)
+CREATE TABLE events (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id     TEXT UNIQUE NOT NULL,   -- Idempotency key
+    store_id     TEXT NOT NULL,
+    camera_id    TEXT NOT NULL,
+    visitor_id   TEXT NOT NULL,
+    event_type   TEXT NOT NULL,
+    timestamp    TEXT NOT NULL,
+    zone_id      TEXT,
+    dwell_ms     INTEGER,
+    is_staff     BOOLEAN DEFAULT FALSE,
+    confidence   REAL,
+    metadata_json JSON
+);
+
+-- POS transactions (seeded from CSV at startup)
+CREATE TABLE pos_transactions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    txn_id       TEXT UNIQUE NOT NULL,
+    store_id     TEXT NOT NULL,
+    timestamp    TEXT NOT NULL,
+    amount       REAL
+);
+
+-- Indexes for sub-millisecond query performance
+CREATE INDEX idx_store_staff ON events(store_id, is_staff);
+CREATE INDEX idx_visitor     ON events(visitor_id);
+CREATE INDEX idx_timestamp   ON events(timestamp);
+CREATE INDEX idx_event_type  ON events(event_type);
+```
+
+---
+
+*Built by [Keshab Kumar](https://github.com/keshabkjha) for the Purplle Tech Challenge 2026.*

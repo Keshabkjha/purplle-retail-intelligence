@@ -123,11 +123,27 @@ def get_store_metrics_data(store_id: str, db: Session):
         abandoned_count = total_billing_visitors - converted_billing_visitors
         abandonment_rate = round(100.0 * abandoned_count / total_billing_visitors, 2)
 
+    # Per-Zone Dwell Breakdown
+    # Compute average dwell seconds per zone from ZONE_DWELL and ZONE_EXIT events
+    zone_dwell_secs = {}  # zone_id -> list of dwell_ms values
+    for ev in events:
+        if ev.zone_id and ev.dwell_ms and ev.dwell_ms > 0:
+            if ev.event_type in ("ZONE_DWELL", "ZONE_EXIT", "BILLING_QUEUE_JOIN", "BILLING_QUEUE_ABANDON"):
+                if ev.zone_id not in zone_dwell_secs:
+                    zone_dwell_secs[ev.zone_id] = []
+                zone_dwell_secs[ev.zone_id].append(ev.dwell_ms / 1000.0)
+
+    average_dwell_per_zone = {}
+    for zone_id, dwell_list in zone_dwell_secs.items():
+        if dwell_list:
+            average_dwell_per_zone[zone_id] = round(sum(dwell_list) / len(dwell_list), 2)
+
     return {
         "store_id": store_id,
         "unique_visitors": unique_visitors,
         "conversion_rate": conversion_rate,
         "average_dwell_minutes": avg_dwell_minutes,
+        "average_dwell_per_zone": average_dwell_per_zone,
         "current_queue_depth": current_queue_depth,
         "abandonment_rate": abandonment_rate
     }

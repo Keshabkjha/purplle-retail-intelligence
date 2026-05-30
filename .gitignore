@@ -2,32 +2,61 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.*
+*.env
+
+# Database (do not commit production data)
+store_intelligence.db
+*.db
+*.sqlite
+
+# YOLOv8 model weights (large binary — download separately)
+*.pt
+*.onnx
+
+# CCTV footage (large media files — not for version control)
+CCTV Footage/
+annotated_*.mp4
+
+# Annotated output videos from pipeline
+annotated_*.mp4
+annotated_*.avi
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Test artifacts
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Database
-*.db
-*.sqlite3
+# Docker
+.docker/
 
-# Models
-*.pt
-*.onnx
+# Logs
+*.log
+logs/
 
-# Data & Footage
-CCTV Footage/
-*.mp4
-*.avi
-*.mkv
-
-# OS
-.DS_Store
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Challenge PDFs (keep in your local workspace)
+*.pdf
+*.xlsx

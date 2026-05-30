@@ -502,8 +502,8 @@
                 const eventsRes = await fetch(`/health`);
                 const health = await eventsRes.json();
                 
-                if (health.last_event_timestamp) {
-                    const dt = new Date(health.last_event_timestamp);
+                if (health.stores && health.stores[storeId] && health.stores[storeId].last_event_timestamp) {
+                    const dt = new Date(health.stores[storeId].last_event_timestamp);
                     const timeStr = dt.toLocaleTimeString();
                     
                     const feedContainer = document.getElementById('live-feed-container');

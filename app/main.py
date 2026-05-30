@@ -82,39 +82,65 @@ def health_check(request: Request, db: Session = Depends(get_db)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"status": "unhealthy", "database": "unavailable"}
         )
-    
-    # Get last event timestamp across all stores
-    last_event = db.query(DBEvent).order_by(DBEvent.timestamp.desc()).first()
-    
-    last_event_ts = None
-    stale_feed = False
-    
-    # Read the last wall-clock ingestion time from app state
+
+    # Build per-store health by querying the latest event per store_id
     last_ingest_time = getattr(request.app.state, "last_ingest_time", None)
-    
-    if last_event:
-        last_event_ts = last_event.timestamp
-        dt = parse_timestamp(last_event_ts)
-        if dt:
-            if last_ingest_time:
-                # If ingestion has occurred in this server session, check delay since last post
-                lag_seconds = (datetime.now(timezone.utc).replace(tzinfo=None) - last_ingest_time).total_seconds()
-                if lag_seconds > 600:
-                    stale_feed = True
-            else:
-                # If no ingestion occurred in this session, check if database holds recent events (within 24 hours)
-                # If the data is historical review data (> 24 hours old), do not mark it stale.
-                now = datetime.now(timezone.utc).replace(tzinfo=None)
-                lag_seconds = (now - dt).total_seconds()
-                if lag_seconds > 600 and (now - dt).days < 1:
-                    stale_feed = True
+
+    # Get distinct store IDs
+    store_ids_rows = db.query(DBEvent.store_id).distinct().all()
+    store_ids = [r[0] for r in store_ids_rows]
+
+    stores_health = {}
+    overall_stale = False
+
+    for sid in store_ids:
+        last_event = db.query(DBEvent).filter(
+            DBEvent.store_id == sid
+        ).order_by(DBEvent.timestamp.desc()).first()
+
+        last_event_ts = None
+        stale_feed = False
+
+        if last_event:
+            last_event_ts = last_event.timestamp
+            dt = parse_timestamp(last_event_ts)
+            if dt:
+                if last_ingest_time:
+                    lag_seconds = (datetime.now(timezone.utc).replace(tzinfo=None) - last_ingest_time).total_seconds()
+                    if lag_seconds > 600:
+                        stale_feed = True
+                else:
+                    now = datetime.now(timezone.utc).replace(tzinfo=None)
+                    lag_seconds = (now - dt).total_seconds()
+                    if lag_seconds > 600 and (now - dt).days < 1:
+                        stale_feed = True
+
+        stores_health[sid] = {
+            "last_event_timestamp": last_event_ts,
+            "stale_feed": stale_feed
+        }
+        if stale_feed:
+            overall_stale = True
+
+    # If no stores, fall back to global last event for backwards compatibility
+    if not store_ids:
+        last_event = db.query(DBEvent).order_by(DBEvent.timestamp.desc()).first()
+        last_event_ts = last_event.timestamp if last_event else None
+        return {
+            "status": "healthy",
+            "database": db_status,
+            "last_event_timestamp": last_event_ts,
+            "stale_feed": False,
+            "stores": {}
+        }
 
     return {
         "status": "healthy",
         "database": db_status,
-        "last_event_timestamp": last_event_ts,
-        "stale_feed": stale_feed
+        "stale_feed": overall_stale,
+        "stores": stores_health
     }
+
 
 @app.post("/events/ingest", status_code=status.HTTP_207_MULTI_STATUS)
 def ingest_events(events: List[Any], request: Request, db: Session = Depends(get_db)):

@@ -220,8 +220,17 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
     print(f"Annotated output will be saved to: {out_path}")
 
     # Session states
-    # visitor_id -> { "current_zone": zone, "enter_time": dt, "last_seen": dt, "dwell_sent_count": int, "seq": int }
+    # visitor_id -> { "current_zone", "enter_time", "last_seen", "dwell_sent_count", "seq", "is_staff" }
     active_sessions = {}
+    
+    # Track visitors who have fully exited, for REENTRY detection
+    # visitor_id -> True
+    historical_exits = {}
+
+    # Track which billing visitors actually completed purchase (correlated at session end)
+    # Not feasible in real-time without POS; we use zone-change detection as proxy:
+    # If visitor leaves BILLING to any non-EXIT zone, it's an abandon.
+    # If visitor leaves BILLING to EXIT zone, it's a purchase (assumed).
     
     # Clip base start time shifted to 16:40:00 to align with POS transaction timestamps
     base_time = datetime(2026, 4, 10, 16, 40, 0)
@@ -276,37 +285,61 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                     if frame_num % 15 == 0:
                         # Manage session states
                         if vid not in active_sessions:
-                            # Start new session: emit ENTRY event if on entry camera
                             active_sessions[vid] = {
                                 "current_zone": None,
                                 "enter_time": current_time,
                                 "last_seen": current_time,
                                 "dwell_sent_count": 0,
-                                "seq": 1
+                                "seq": 1,
+                                "is_staff": is_staff
                             }
                             
-                            # Post ENTRY event
-                            entry_evt = {
-                                "event_id": str(uuid.uuid4()),
-                                "store_id": store_id,
-                                "camera_id": camera_id,
-                                "visitor_id": vid,
-                                "event_type": "ENTRY",
-                                "timestamp": ts_str,
-                                "zone_id": "ENTRY" if camera_id == "CAM_ENTRY_01" else zone_id,
-                                "dwell_ms": 0,
-                                "is_staff": is_staff,
-                                "confidence": float(conf),
-                                "metadata": {
-                                    "queue_depth": None,
-                                    "sku_zone": None,
-                                    "session_seq": 1
+                            # Determine if this is a REENTRY or first ENTRY
+                            if vid in historical_exits:
+                                # Visitor previously exited — emit REENTRY
+                                reentry_evt = {
+                                    "event_id": str(uuid.uuid4()),
+                                    "store_id": store_id,
+                                    "camera_id": camera_id,
+                                    "visitor_id": vid,
+                                    "event_type": "REENTRY",
+                                    "timestamp": ts_str,
+                                    "zone_id": "ENTRY" if camera_id == "CAM_ENTRY_01" else zone_id,
+                                    "dwell_ms": 0,
+                                    "is_staff": is_staff,
+                                    "confidence": float(conf),
+                                    "metadata": {
+                                        "queue_depth": None,
+                                        "sku_zone": None,
+                                        "session_seq": 1
+                                    }
                                 }
-                            }
-                            post_event(entry_evt)
+                                post_event(reentry_evt)
+                            else:
+                                # Brand new visitor — emit ENTRY
+                                entry_evt = {
+                                    "event_id": str(uuid.uuid4()),
+                                    "store_id": store_id,
+                                    "camera_id": camera_id,
+                                    "visitor_id": vid,
+                                    "event_type": "ENTRY",
+                                    "timestamp": ts_str,
+                                    "zone_id": "ENTRY" if camera_id == "CAM_ENTRY_01" else zone_id,
+                                    "dwell_ms": 0,
+                                    "is_staff": is_staff,
+                                    "confidence": float(conf),
+                                    "metadata": {
+                                        "queue_depth": None,
+                                        "sku_zone": None,
+                                        "session_seq": 1
+                                    }
+                                }
+                                post_event(entry_evt)
                         
                         sess = active_sessions[vid]
                         sess["last_seen"] = current_time
+                        # Update staff status from latest detection (may improve over time)
+                        sess["is_staff"] = is_staff
                         
                         # Check zone changes
                         old_zone = sess["current_zone"]
@@ -314,6 +347,29 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                             # Exit old zone
                             if old_zone:
                                 sess["seq"] += 1
+
+                                # If leaving BILLING zone to a non-EXIT zone: BILLING_QUEUE_ABANDON
+                                if old_zone == "BILLING" and zone_id not in (None, "EXIT"):
+                                    abandon_evt = {
+                                        "event_id": str(uuid.uuid4()),
+                                        "store_id": store_id,
+                                        "camera_id": camera_id,
+                                        "visitor_id": vid,
+                                        "event_type": "BILLING_QUEUE_ABANDON",
+                                        "timestamp": ts_str,
+                                        "zone_id": "BILLING",
+                                        "dwell_ms": int((current_time - sess["enter_time"]).total_seconds() * 1000),
+                                        "is_staff": sess["is_staff"],
+                                        "confidence": float(conf),
+                                        "metadata": {
+                                            "queue_depth": None,
+                                            "sku_zone": "BILLING",
+                                            "session_seq": sess["seq"]
+                                        }
+                                    }
+                                    post_event(abandon_evt)
+                                    sess["seq"] += 1
+
                                 exit_evt = {
                                     "event_id": str(uuid.uuid4()),
                                     "store_id": store_id,
@@ -323,7 +379,7 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                                     "timestamp": ts_str,
                                     "zone_id": old_zone,
                                     "dwell_ms": int((current_time - sess["enter_time"]).total_seconds() * 1000),
-                                    "is_staff": is_staff,
+                                    "is_staff": sess["is_staff"],
                                     "confidence": float(conf),
                                     "metadata": {
                                         "queue_depth": None,
@@ -356,7 +412,7 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                                     "timestamp": ts_str,
                                     "zone_id": zone_id,
                                     "dwell_ms": 0,
-                                    "is_staff": is_staff,
+                                    "is_staff": sess["is_staff"],
                                     "confidence": float(conf),
                                     "metadata": {
                                         "queue_depth": q_depth,
@@ -383,7 +439,7 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                                         "timestamp": ts_str,
                                         "zone_id": zone_id,
                                         "dwell_ms": int(duration * 1000),
-                                        "is_staff": is_staff,
+                                        "is_staff": sess["is_staff"],
                                         "confidence": float(conf),
                                         "metadata": {
                                             "queue_depth": None,
@@ -400,7 +456,7 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                 if vid not in seen_tracks and (current_time - sess["last_seen"]).total_seconds() > 15:
                     to_remove.append(vid)
                     
-                    # Post EXIT event
+                    # Post EXIT event — use stored is_staff from session, not hardcoded False
                     sess["seq"] += 1
                     exit_evt = {
                         "event_id": str(uuid.uuid4()),
@@ -411,7 +467,7 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                         "timestamp": ts_str,
                         "zone_id": "ENTRY" if camera_id == "CAM_ENTRY_01" else sess["current_zone"],
                         "dwell_ms": int((current_time - sess["enter_time"]).total_seconds() * 1000) if sess["current_zone"] else 0,
-                        "is_staff": False, # Just assuming not staff on exit for simplicity
+                        "is_staff": sess["is_staff"],  # FIX: use session's tracked is_staff value
                         "confidence": 0.9,
                         "metadata": {
                             "queue_depth": None,
@@ -420,6 +476,8 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
                         }
                     }
                     post_event(exit_evt)
+                    # Mark as historically exited for REENTRY detection
+                    historical_exits[vid] = True
             
             for vid in to_remove:
                 del active_sessions[vid]
@@ -430,6 +488,7 @@ def run_detection(video_path: str, model_path: str = "yolov8n.pt"):
     cap.release()
     out.release()
     print(f"Finished processing {video_path}")
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
