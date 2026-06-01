@@ -103,9 +103,9 @@ sequenceDiagram
 
 ---
 
-## 4. Spatial Mapping Pipeline
+## 4. Spatial Mapping & Cross-Camera Re-ID Pipeline
 
-The core technical challenge: mapping a 2D bounding box in camera pixel coordinates to a logical store zone on a 2D floor plan.
+The core technical challenge: mapping a 2D bounding box in camera pixel coordinates to a logical store zone on a 2D floor plan, and maintaining identity continuity as visitors walk between camera feeds.
 
 ```
 Camera Frame (1920 × 1080 px)         Store Floor Plan (940 × 451 px)
@@ -126,33 +126,78 @@ Camera Frame (1920 × 1080 px)         Store Floor Plan (940 × 451 px)
          ▼
    Floor coordinates (wx, wy)
          │
-         ▼
-   Ray Casting: point_in_polygon(wx, wy, zone_polygon)
+         ├───► Ray Casting: point_in_polygon(wx, wy, zone_polygon) ───► zone_id = "EB_KOREAN" | "BILLING" | None
          │
-         ▼
-   zone_id = "EB_KOREAN" | "BILLING" | None
+         └───► Cross-Camera Session Matcher (Spatial-Temporal Proximity)
 ```
 
 **Calibration**: 4 corresponding real-world points are clicked in both the camera frame and the floor plan image using `pipeline/calibrate.py`. OpenCV calculates the 3×3 homography matrix `H`.  
 **Fallback**: If no calibration exists for a camera, a proportional linear scaling matrix is used.
 
+### 4.1 Cross-Camera Spatial-Temporal Re-ID
+
+Since different video streams are processed sequentially by our background pipeline, the system tracks identity continuity across camera boundaries using a persistent, file-based state log (`pipeline/session_state.json`).
+
+When a new track (person) appears in any camera:
+1. It registers the local `track_id` and checks the global session list.
+2. It looks for matching sessions from **other cameras** that were active/seen within a **30-second window** ($|t_{\text{current}} - t_{\text{last\_seen}}| \le 30$ seconds).
+3. Within that temporal window, it calculates the **Euclidean distance** on the 2D floor plan coordinate space:
+   $$\text{Distance} = \sqrt{(w_x - l_x)^2 + (w_y - l_y)^2}$$
+4. If the minimum distance is $\le 150.0$ pixels (representing approximately $2.5$ meters in the store layout), it unifies the identity! The local track is assigned the existing unified `visitor_id` (e.g. `VIS_1` instead of `VIS_2`), and subsequent events are logged under the unified ID.
+5. If no match is found, a brand-new unified ID is created.
+6. When `"entry_camera"` starts processing, the session file is automatically reset to start a fresh tracking run.
+
 ---
 
-## 5. Staff Detection Algorithm
+## 5. Staff Detection & Exclusions
 
-Staff members wear identifiable dark uniforms. The detector uses HSV color analysis:
+Staff members wear identifiable dark uniforms. Rather than relying entirely on a static clothing check, the system uses a **Hybrid Visual-Behavioral Classifier** that combines visual features with physical behaviors to achieve high accuracy:
 
 ```
-1. Crop the top 50% of bounding box (upper torso region)
-2. Convert BGR frame to HSV color space
-3. Apply color mask for dark tones:
-   lower_black = [0,   0,   0  ]
-   upper_black = [180, 255, 50 ]
-4. Calculate: match_ratio = masked_pixels / total_torso_pixels
-5. If match_ratio > 30% → classify as STAFF → exclude from all metrics
+                  ┌────────────────────────────────────────┐
+                  │ Upper Torso Crop (top 50% of BBox)     │
+                  └───────────────────┬────────────────────┘
+                                      │
+                                      ▼
+                      [HSV Color Space Transformation]
+                      Lower Black: [0, 0, 0] | Upper Black: [180, 255, 50]
+                                      │
+                                      ▼
+                        Torso Uniform Match Ratio
+                                      │
+               ┌──────────────────────┴──────────────────────┐
+               ▼                                             ▼
+        [Match Ratio > 30%]                          [Match Ratio <= 30%]
+         Base Score: 0.6                              Base Score: 0.0
+               │                                             │
+               └──────────────────────┬──────────────────────┘
+                                      │
+                                      ▼
+                      [Add Behavioral Confidence Boosts]
+                      +0.4: Position behind register counter (wx > 820)
+                      +0.3: High dwell in BILLING area (>90 seconds)
+                      +0.3: Long cumulative presence (>180 seconds)
+                      +0.2: Seen in >=2 different cameras
+                                      │
+                                      ▼
+                       Final Staff Score (0.0 to 1.8)
+                                      │
+                                      ▼
+                        Is Staff Score >= 0.5?
+                                 /      \
+                               Yes       No
+                             /              \
+                     [STAFF = True]         [STAFF = False]
 ```
 
-Staff visitors are tagged with `is_staff=True` in all their events and **filtered out** at the database query level in every metric, funnel, and heatmap calculation.
+### 5.1 Robust Behavioral Rules
+
+1. **Torso Uniform Check**: Crops the top 50% of the person's bounding box, converts to the HSV color space, and applies a dark color mask. A match ratio $>30\%$ yields a base confidence score of `0.6`.
+2. **Billing Counter Check**: Staff registers are located behind the counter at $w_x > 820$ inside the BILLING zone. Standing in this area adds a `0.4` boost.
+3. **Queue Dwell Check**: A shopper in a queue moves steadily. A staff member standing still behind the counter for $>90$ seconds without buying adds a `0.3` boost.
+4. **Presence duration**: Staff members remain active in the store far longer than average shoppers. An active session $>180$ seconds adds `0.3`, and presence in $\ge 2$ different cameras adds `0.2`.
+
+When the unified `staff_score` $\ge 0.5$, they are flagged as staff. This status is persistently logged inside the global tracker state so it carries over to other cameras and all session events (including `EXIT` and `REENTRY`), filtering them out of conversion metrics, heatmap displays, and retail KPIs.
 
 ---
 

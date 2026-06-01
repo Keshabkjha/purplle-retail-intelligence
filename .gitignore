@@ -60,3 +60,7 @@ logs/
 # Challenge PDFs (keep in your local workspace)
 *.pdf
 *.xlsx
+
+# Transient state files
+pipeline/session_state.json
+session_state.json

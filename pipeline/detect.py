@@ -168,6 +168,146 @@ def is_staff_heuristic(track_id, bbox, frame):
         
     return False
 
+class CrossCameraSessionTracker:
+    def __init__(self, state_file="pipeline/session_state.json"):
+        self.state_file = state_file
+        self.sessions = {}
+        self.local_to_unified = {}  # track_id -> unified_id for the current video run
+        self.load_state()
+
+    def load_state(self):
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, "r") as f:
+                    data = json.load(f)
+                    self.sessions = data.get("visitor_sessions", {})
+            except Exception as e:
+                print(f"Error loading cross-camera state: {e}")
+                self.sessions = {}
+        else:
+            self.sessions = {}
+
+    def save_state(self):
+        try:
+            os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
+            with open(self.state_file, "w") as f:
+                json.dump({"visitor_sessions": self.sessions}, f, indent=2)
+        except Exception as e:
+            print(f"Error saving cross-camera state: {e}")
+
+    def is_reentry(self, unified_id, current_camera_id):
+        """Determine if visitor has been seen in another camera previously."""
+        if unified_id in self.sessions:
+            sess = self.sessions[unified_id]
+            for cam in sess.get("camera_track_ids", {}):
+                if cam != current_camera_id:
+                    return True
+        return False
+
+    def get_unified_id(self, track_id, camera_id, wx, wy, current_time, is_staff_initial):
+        """Maps a local camera track_id to a globally consistent unified visitor_id."""
+        if track_id in self.local_to_unified:
+            unified_id = self.local_to_unified[track_id]
+            if unified_id in self.sessions:
+                sess = self.sessions[unified_id]
+                sess["last_seen_camera"] = camera_id
+                sess["last_seen_time"] = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                sess["last_seen_x"] = wx
+                sess["last_seen_y"] = wy
+                sess["camera_track_ids"][camera_id] = track_id
+            return unified_id
+
+        # Look for a spatial-temporal match in previously exited/seen visitors from other cameras
+        matched_id = None
+        min_dist = float('inf')
+        time_diff = 0.0
+
+        for uid, sess in self.sessions.items():
+            if sess["last_seen_camera"] == camera_id:
+                continue  # Match across different cameras only
+
+            last_time_str = sess["last_seen_time"]
+            try:
+                last_time = datetime.strptime(last_time_str, "%Y-%m-%dT%H:%M:%SZ")
+            except ValueError:
+                continue
+
+            diff = abs((current_time - last_time).total_seconds())
+            if diff <= 30.0:  # 30-second window
+                lx, ly = sess["last_seen_x"], sess["last_seen_y"]
+                dist = np.sqrt((wx - lx)**2 + (wy - ly)**2)
+                # 150 pixels represents approx 2.5 meters on our 940x451 floor plan
+                if dist <= 150.0 and dist < min_dist:
+                    min_dist = dist
+                    matched_id = uid
+                    time_diff = diff
+
+        if matched_id:
+            print(f"🔗 [Re-ID Match] Track {track_id} in {camera_id} matched to {matched_id} (dist: {min_dist:.1f}px, time gap: {time_diff:.1f}s)")
+            self.local_to_unified[track_id] = matched_id
+            sess = self.sessions[matched_id]
+            sess["last_seen_camera"] = camera_id
+            sess["last_seen_time"] = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            sess["last_seen_x"] = wx
+            sess["last_seen_y"] = wy
+            sess["camera_track_ids"][camera_id] = track_id
+            self.save_state()
+            return matched_id
+        else:
+            new_id = f"VIS_{track_id}"
+            base_new_id = new_id
+            counter = 1
+            while new_id in self.sessions:
+                new_id = f"{base_new_id}_{counter}"
+                counter += 1
+
+            self.local_to_unified[track_id] = new_id
+            self.sessions[new_id] = {
+                "unified_id": new_id,
+                "last_seen_camera": camera_id,
+                "last_seen_time": current_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "last_seen_x": wx,
+                "last_seen_y": wy,
+                "is_staff": is_staff_initial,
+                "camera_track_ids": {camera_id: track_id}
+            }
+            self.save_state()
+            return new_id
+
+def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_staff, tracker):
+    """Hybrid visual-behavioral staff classifier."""
+    unified_is_staff_init = False
+    camera_count = 1
+    if tracker and vid in tracker.sessions:
+        unified_is_staff_init = tracker.sessions[vid].get("is_staff", False)
+        camera_count = len(tracker.sessions[vid].get("camera_track_ids", {}))
+
+    # Torso clothing color is a strong signal
+    staff_score = 0.6 if is_clothing_staff or unified_is_staff_init else 0.0
+
+    # Behavioral signals
+    if zone_id == "BILLING":
+        if wx > 820:  # Behind the billing register counter
+            staff_score += 0.4
+        billing_duration = (current_time - sess["enter_time"]).total_seconds()
+        if billing_duration > 90:
+            staff_score += 0.3
+
+    total_duration = (current_time - sess.get("first_seen_time", sess["enter_time"])).total_seconds()
+    if total_duration > 180:
+        staff_score += 0.3
+
+    if camera_count >= 2:
+        staff_score += 0.2
+
+    is_staff = staff_score >= 0.5
+
+    if tracker and vid in tracker.sessions:
+        tracker.sessions[vid]["is_staff"] = is_staff
+        tracker.save_state()
+
+    return is_staff
+
 def post_event(event):
     """Posts a structured event to the FastAPI ingest endpoint."""
     url = "http://localhost:8000/events/ingest"
@@ -219,18 +359,25 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
     out = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
     print(f"Annotated output will be saved to: {out_path}")
 
+    # Reset/clear cross-camera tracking state on entry camera run
+    state_file = "pipeline/session_state.json"
+    if "entry" in base_name:
+        if os.path.exists(state_file):
+            try:
+                os.remove(state_file)
+                print(f"Resetting cross-camera session state file: {state_file}")
+            except Exception as e:
+                print(f"Error resetting state file: {e}")
+
+    tracker = CrossCameraSessionTracker(state_file)
+
     # Session states
-    # visitor_id -> { "current_zone", "enter_time", "last_seen", "dwell_sent_count", "seq", "is_staff" }
+    # visitor_id -> { "current_zone", "enter_time", "first_seen_time", "last_seen", "dwell_sent_count", "seq", "is_staff" }
     active_sessions = {}
     
     # Track visitors who have fully exited, for REENTRY detection
     # visitor_id -> True
     historical_exits = {}
-
-    # Track which billing visitors actually completed purchase (correlated at session end)
-    # Not feasible in real-time without POS; we use zone-change detection as proxy:
-    # If visitor leaves BILLING to any non-EXIT zone, it's an abandon.
-    # If visitor leaves BILLING to EXIT zone, it's a purchase (assumed).
     
     # Clip base start time shifted to 16:40:00 to align with POS transaction timestamps
     base_time = datetime(2026, 4, 10, 16, 40, 0)
@@ -252,6 +399,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
         results = model.track(frame, persist=True, verbose=False)
         
         seen_tracks = set()
+        seen_vids = set()
         if results and results[0].boxes and results[0].boxes.id is not None:
             boxes = results[0].boxes.xyxy.cpu().numpy()
             track_ids = results[0].boxes.id.cpu().numpy().astype(int)
@@ -268,15 +416,22 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                     # Map to floor plan
                     wx, wy = map_camera_to_floor(px, py, camera_id, width, height)
                     zone_id = determine_zone(wx, wy, camera_id)
-                    is_staff = is_staff_heuristic(track_id, box, frame)
+                    is_staff_init = is_staff_heuristic(track_id, box, frame)
 
-                    vid = f"VIS_{track_id}"
+                    # Get globally consistent unified visitor ID
+                    vid = tracker.get_unified_id(track_id, camera_id, wx, wy, current_time, is_staff_init)
+                    seen_vids.add(vid)
+                    
+                    # Get display staff flag dynamically
+                    is_staff_display = is_staff_init
+                    if vid in tracker.sessions:
+                        is_staff_display = tracker.sessions[vid].get("is_staff", is_staff_init)
                     
                     # Draw bounding box and info on frame
-                    color = (255, 0, 255) if is_staff else (0, 255, 0)
+                    color = (255, 0, 255) if is_staff_display else (0, 255, 0)
                     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
                     label = f"{vid} | {zone_id or 'UNKNOWN'}"
-                    if is_staff:
+                    if is_staff_display:
                         label += " [STAFF]"
                     cv2.putText(frame, label, (int(x1), max(10, int(y1) - 10)), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
@@ -288,14 +443,19 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                             active_sessions[vid] = {
                                 "current_zone": None,
                                 "enter_time": current_time,
+                                "first_seen_time": current_time,
                                 "last_seen": current_time,
                                 "dwell_sent_count": 0,
                                 "seq": 1,
-                                "is_staff": is_staff
+                                "is_staff": is_staff_init
                             }
                             
                             # Determine if this is a REENTRY or first ENTRY
-                            if vid in historical_exits:
+                            is_reentry = (vid in historical_exits) or tracker.is_reentry(vid, camera_id)
+                            is_staff = update_staff_status(vid, active_sessions[vid], current_time, zone_id, wx, wy, is_staff_init, tracker)
+                            active_sessions[vid]["is_staff"] = is_staff
+                            
+                            if is_reentry:
                                 # Visitor previously exited — emit REENTRY
                                 reentry_evt = {
                                     "event_id": str(uuid.uuid4()),
@@ -339,6 +499,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                         sess = active_sessions[vid]
                         sess["last_seen"] = current_time
                         # Update staff status from latest detection (may improve over time)
+                        is_staff = update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_staff_init, tracker)
                         sess["is_staff"] = is_staff
                         
                         # Check zone changes
@@ -453,7 +614,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
         if frame_num % 15 == 0:
             to_remove = []
             for vid, sess in active_sessions.items():
-                if vid not in seen_tracks and (current_time - sess["last_seen"]).total_seconds() > 15:
+                if vid not in seen_vids and (current_time - sess["last_seen"]).total_seconds() > 15:
                     to_remove.append(vid)
                     
                     # Post EXIT event — use stored is_staff from session, not hardcoded False
