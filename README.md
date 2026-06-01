@@ -111,13 +111,16 @@ cd purplle-retail-intelligence
 # 2. Start the API and database
 docker compose up -d --build
 
-# 3. Verify the API is live
+# 3. Seed the POS transaction data
+python3 -m app.ingestion
+
+# 4. Verify the API is live
 curl http://localhost:8000/health
 
-# 4. Run the CV pipeline on a video
+# 5. Run the CV pipeline on a video
 python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 
-# 5. Open the live dashboard
+# 6. Open the live dashboard
 open http://localhost:8000/dashboard
 ```
 
@@ -130,7 +133,10 @@ pip install -r api-requirements.txt
 # Start the API server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# In a separate terminal, run the pipeline
+# In a separate terminal, seed the POS data
+python3 -m app.ingestion
+
+# Run the pipeline
 python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 ```
 

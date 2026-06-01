@@ -55,12 +55,24 @@ def get_store_metrics_data(store_id: str, db: Session):
     billing_visitor_ids = set()
 
     for vid, ev_list in sessions.items():
-        # Get dwell time (difference between first and last event)
-        first_time = parse_timestamp(ev_list[0].timestamp)
-        last_time = parse_timestamp(ev_list[-1].timestamp)
-        if first_time and last_time:
-            dwell_sec = (last_time - first_time).total_seconds()
-            total_dwell_seconds += max(dwell_sec, 0.0)
+        # Segment into visits (split on ENTRY or REENTRY events) to avoid double counting out-of-store time gaps
+        visits = []
+        current_visit = []
+        for ev in ev_list:
+            if ev.event_type in ("ENTRY", "REENTRY") and current_visit:
+                visits.append(current_visit)
+                current_visit = []
+            current_visit.append(ev)
+        if current_visit:
+            visits.append(current_visit)
+
+        # Get dwell time (accumulated across discrete visits)
+        for visit in visits:
+            first_time = parse_timestamp(visit[0].timestamp)
+            last_time = parse_timestamp(visit[-1].timestamp)
+            if first_time and last_time:
+                dwell_sec = (last_time - first_time).total_seconds()
+                total_dwell_seconds += max(dwell_sec, 0.0)
 
         # Check if they visited the billing zone
         billing_visits = []

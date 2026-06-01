@@ -144,6 +144,12 @@ def health_check(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/events/ingest", status_code=status.HTTP_207_MULTI_STATUS)
 def ingest_events(events: List[Any], request: Request, db: Session = Depends(get_db)):
+    if len(events) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Batch size exceeds the maximum limit of 500 events."
+        )
+
     request.state.event_count = len(events)
     
     if not events:
@@ -183,6 +189,26 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
             if existing:
                 success_count += 1
                 continue
+
+            # Validate session_seq monotonicity per visitor
+            last_event = db.query(DBEvent).filter(
+                DBEvent.visitor_id == event.visitor_id
+            ).order_by(DBEvent.timestamp.desc()).first()
+            
+            if last_event and last_event.metadata_json:
+                meta = last_event.metadata_json
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except Exception:
+                        meta = {}
+                last_seq = meta.get("session_seq", 0)
+                if event.metadata.session_seq < last_seq:
+                    errors.append({
+                        "event_id": event.event_id,
+                        "error": f"Monotonicity violation: session_seq {event.metadata.session_seq} is less than last seq {last_seq}"
+                    })
+                    continue
 
             db_event = DBEvent(
                 event_id=event.event_id,

@@ -134,18 +134,21 @@ Camera Frame (1920 × 1080 px)         Store Floor Plan (940 × 451 px)
 **Calibration**: 4 corresponding real-world points are clicked in both the camera frame and the floor plan image using `pipeline/calibrate.py`. OpenCV calculates the 3×3 homography matrix `H`.  
 **Fallback**: If no calibration exists for a camera, a proportional linear scaling matrix is used.
 
-### 4.1 Cross-Camera Spatial-Temporal Re-ID
+### 4.1 Multi-Signal Cross-Camera Re-ID
 
-Since different video streams are processed sequentially by our background pipeline, the system tracks identity continuity across camera boundaries using a persistent, file-based state log (`pipeline/session_state.json`).
+Since different video streams are processed sequentially by our background pipeline, the system tracks identity continuity across camera boundaries using a persistent, file-based state log (`pipeline/session_state.json`) and a unified multi-signal matching function.
 
 When a new track (person) appears in any camera:
 1. It registers the local `track_id` and checks the global session list.
-2. It looks for matching sessions from **other cameras** that were active/seen within a **30-second window** ($|t_{\text{current}} - t_{\text{last\_seen}}| \le 30$ seconds).
-3. Within that temporal window, it calculates the **Euclidean distance** on the 2D floor plan coordinate space:
-   $$\text{Distance} = \sqrt{(w_x - l_x)^2 + (w_y - l_y)^2}$$
-4. If the minimum distance is $\le 150.0$ pixels (representing approximately $2.5$ meters in the store layout), it unifies the identity! The local track is assigned the existing unified `visitor_id` (e.g. `VIS_1` instead of `VIS_2`), and subsequent events are logged under the unified ID.
-5. If no match is found, a brand-new unified ID is created.
-6. When `"entry_camera"` starts processing, the session file is automatically reset to start a fresh tracking run.
+2. It extracts an **appearance-based visual signature** from the person's bounding box crop using a 3D HSV color histogram (3D bins across Hue, Saturation, and Value channels).
+3. It filters matching candidate sessions from **other cameras** that were active within a **30-second window** ($|t_{\text{current}} - t_{\text{last\_seen}}| \le 30$ seconds).
+4. For each candidate session, it calculates a **Unified Match Score** ($S_{\text{match}} \in [0, 1]$) combining three signals:
+   - **Spatial Proximity (40% weight)**: Based on homography-mapped 2D floor plan Euclidean distance. If the distance $d \le 150$ pixels (~2.5 meters), $S_{\text{spatial}} = 1 - (d / 150)$, else $0$.
+   - **Temporal Closeness (30% weight)**: Based on the absolute time delta $dt \le 30$ seconds. $S_{\text{temporal}} = 1 - (dt / 30)$.
+   - **Visual Appearance Correlation (30% weight)**: Computed via the correlation of the HSV color histograms ($S_{\text{visual}} = \text{compare\_appearance}(\text{hist}_1, \text{hist}_2)$).
+5. If the unified match score $S_{\text{match}} \ge 0.65$, it selects the best matching candidate! The local track is assigned the existing unified `visitor_id`, and subsequent events are logged under this ID. To handle camera angle and lighting variations, it continuously performs a rolling update of the visual signature ($70\%$ historical average + $30\%$ current frame signature).
+6. If no match is found, a brand-new unified ID is created.
+7. When `"entry_camera"` starts processing, the session file is automatically reset to start a fresh tracking run.
 
 ---
 
@@ -346,7 +349,7 @@ CREATE TABLE pos_transactions (
     amount       REAL
 );
 
--- Indexes for sub-millisecond query performance
+-- Indexes for optimized query performance
 CREATE INDEX idx_store_staff ON events(store_id, is_staff);
 CREATE INDEX idx_visitor     ON events(visitor_id);
 CREATE INDEX idx_timestamp   ON events(timestamp);
