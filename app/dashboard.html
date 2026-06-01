@@ -186,9 +186,16 @@
                 <h1 class="text-2xl font-extrabold tracking-wide bg-gradient-to-r from-indigo-200 via-indigo-400 to-indigo-600 bg-clip-text text-transparent">
                     PURPLLE RETAIL • INTELLIGENCE HUB
                 </h1>
-                <p class="text-xs text-slate-400 font-medium tracking-wider flex items-center gap-1.5 mt-0.5 uppercase">
+                <!-- Default: Store ID. Camera mode: Camera name + back button -->
+                <p class="text-xs text-slate-400 font-medium tracking-wider flex items-center gap-1.5 mt-0.5 uppercase" id="header-subtitle">
                     <span class="inline-block w-1.5 h-1.5 rounded-full bg-accentBlue"></span> Store ID: <span id="store-id-display">ST1008</span>
                 </p>
+                <!-- Camera mode banner (hidden by default) -->
+                <div id="camera-mode-banner" class="hidden flex items-center gap-2 mt-1">
+                    <span class="text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">📷 Camera Mode</span>
+                    <span id="camera-mode-label" class="text-xs font-bold text-white"></span>
+                    <button onclick="exitCameraMode()" class="text-[10px] text-slate-400 hover:text-white underline underline-offset-2 transition-colors">← Back to Store View</button>
+                </div>
             </div>
         </div>
 
@@ -230,6 +237,11 @@
     </header>
 
     <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-10 flex flex-col gap-8">
+
+        <!-- Camera Strip: per-camera live counts -->
+        <div id="camera-strip" class="grid grid-cols-5 gap-3">
+            <!-- Populated by JS fetchCameraStrip() -->
+        </div>
         
         <!-- KPI Cards Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
@@ -497,45 +509,38 @@
 
     </main>
 
-    <!-- Video Selection Modal (Hidden by default) -->
+    <!-- Camera Selector Modal -->
     <div id="video-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300 opacity-0">
-        <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 shadow-2xl transform scale-95 transition-transform duration-300" id="video-modal-content">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold text-white flex items-center gap-2"><i data-lucide="video" class="w-5 h-5 text-accentBlue"></i> Select Camera Feed</h2>
+        <div class="glass-panel w-full max-w-lg p-6 rounded-2xl border border-white/10 shadow-2xl transform scale-95 transition-transform duration-300" id="video-modal-content">
+            <div class="flex justify-between items-center mb-1">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2"><i data-lucide="camera" class="w-5 h-5 text-accentBlue"></i> Camera Intelligence Centre</h2>
                 <button onclick="closeVideoModal()" class="text-slate-400 hover:text-white transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            
-            <p class="text-xs text-slate-400 mb-4 leading-relaxed" id="video-modal-desc">Select a video to run the live YOLO AI detection pipeline on. The metrics dashboard will update in real-time as the video is processed.</p>
-            
-            <div id="video-loading" class="flex items-center justify-center py-6 text-slate-400">
-                <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
-            </div>
-            
-            <!-- Video List View -->
-            <div id="video-list-container" class="hidden flex flex-col gap-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                <!-- Videos will be injected here -->
+            <p class="text-xs text-slate-500 mb-4">Select a camera to view its data or run the live AI pipeline on it.</p>
+
+            <div id="cam-selector-loading" class="flex items-center justify-center py-8 text-slate-400">
+                <i data-lucide="loader-2" class="w-6 h-6 animate-spin mr-2"></i> Loading cameras...
             </div>
 
-            <!-- Video Preview View -->
+            <!-- Camera Cards Grid -->
+            <div id="cam-selector-grid" class="hidden flex flex-col gap-3 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar">
+                <!-- Injected by JS -->
+            </div>
+
+            <!-- Video Preview -->
             <div id="video-preview-container" class="hidden flex flex-col gap-4">
-                <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video flex items-center justify-center">
+                <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video">
                     <video id="video-player" class="w-full h-full object-contain" controls autoplay muted loop playsinline></video>
                 </div>
                 <div class="flex justify-between items-center gap-3">
-                    <button onclick="showVideoList()" class="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-200 transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Back</button>
-                    <button id="btn-confirm-video" class="flex-1 px-4 py-2 rounded-lg bg-accentBlue hover:bg-blue-500 text-xs font-bold text-white transition-colors flex items-center justify-center gap-2 shadow-lg shadow-accentBlue/20">
+                    <button onclick="showCameraSelector()" class="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-200 transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Back</button>
+                    <button id="btn-confirm-video" class="flex-1 px-4 py-2 rounded-lg bg-accentBlue hover:bg-blue-500 text-xs font-bold text-white transition-colors flex items-center justify-center gap-2">
                         <i data-lucide="play" class="w-4 h-4"></i> Run Pipeline
                     </button>
                 </div>
             </div>
-            
-            <div id="video-empty" class="hidden text-center py-4 bg-white/5 border border-white/5 rounded-lg">
-                <i data-lucide="alert-circle" class="w-6 h-6 text-accentOrange mx-auto mb-2"></i>
-                <p class="text-xs font-semibold text-slate-300">No videos found.</p>
-                <p class="text-[10px] text-slate-500 mt-1">Upload mp4 files to the 'CCTV Footage' directory on Hugging Face.</p>
-            </div>
-            
-            <div class="mt-6 flex justify-end">
+
+            <div class="mt-4 flex justify-end">
                 <button onclick="closeVideoModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition-colors">Cancel</button>
             </div>
         </div>
@@ -556,6 +561,33 @@
         let funnelChart = null;
         let processedEventsCount = 0;
         let dashboardMode = "exec"; // Default to Executive Mode
+
+        // ── Camera Mode State ────────────────────────────────────────────
+        let activeCameraId = null;   // null = store-wide view
+        let activeCameraName = '';
+
+        function camParam() {
+            return activeCameraId ? `&camera_id=${activeCameraId}` : '';
+        }
+
+        function enterCameraMode(cameraId, cameraName) {
+            activeCameraId = cameraId;
+            activeCameraName = cameraName;
+            document.getElementById('header-subtitle').classList.add('hidden');
+            document.getElementById('camera-mode-banner').classList.remove('hidden');
+            document.getElementById('camera-mode-label').textContent = cameraName;
+            closeVideoModal();
+            fetchDashboardData();
+        }
+
+        function exitCameraMode() {
+            activeCameraId = null;
+            activeCameraName = '';
+            document.getElementById('header-subtitle').classList.remove('hidden');
+            document.getElementById('camera-mode-banner').classList.add('hidden');
+            fetchDashboardData();
+        }
+        // ─────────────────────────────────────────────────────────────────
 
         // Manage Dual-Lens Dashboard Perspective Mode
         function setDashboardMode(mode) {
@@ -902,7 +934,7 @@
         // Fetch new events dynamically to show in the live log terminal feed
         async function fetchLiveFeed() {
             try {
-                const eventsRes = await fetch(`/stores/${storeId}/recent-events?limit=15`);
+                const eventsRes = await fetch(`/stores/${storeId}/recent-events?limit=15&${camParam()}`);
                 const events = await eventsRes.json();
                 
                 const feedContainer = document.getElementById('live-feed-container');
@@ -1009,7 +1041,7 @@
                 }
 
                 // 2. Fetch Metrics
-                const metricsRes = await fetch(`/stores/${storeId}/metrics`);
+                const metricsRes = await fetch(`/stores/${storeId}/metrics?${camParam()}`);
                 const metrics = await metricsRes.json();
                 
                 // Update with bounce micro-animations
@@ -1032,7 +1064,7 @@
                 }
 
                 // 3. Fetch Funnel
-                const funnelRes = await fetch(`/stores/${storeId}/funnel`);
+                const funnelRes = await fetch(`/stores/${storeId}/funnel?${camParam()}`);
                 const funnelData = await funnelRes.json();
                 
                 funnelChart.updateSeries([{
@@ -1046,7 +1078,7 @@
                 }]);
 
                 // 4. Fetch Heatmap
-                const heatmapRes = await fetch(`/stores/${storeId}/heatmap`);
+                const heatmapRes = await fetch(`/stores/${storeId}/heatmap?${camParam()}`);
                 const heatmap = await heatmapRes.json();
                 
                 const confBadge = document.getElementById('data-confidence-badge');
@@ -1228,128 +1260,150 @@
         // Video Modal Logic
         let currentlySelectedVideo = null;
 
+        // ── Camera Strip (header row of per-camera counts) ────────────────
+        async function fetchCameraStrip() {
+            try {
+                const res = await fetch(`/stores/${storeId}/cameras`);
+                const cameras = await res.json();
+                const strip = document.getElementById('camera-strip');
+                strip.innerHTML = '';
+                cameras.forEach(cam => {
+                    const isActive = activeCameraId === cam.camera_id;
+                    const card = document.createElement('button');
+                    card.className = `flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all duration-200 cursor-pointer
+                        ${isActive ? 'border-amber-400/60 bg-amber-400/10 text-amber-300' :
+                          cam.is_processed ? 'border-white/10 bg-white/5 hover:border-indigo-400/40 hover:bg-white/10 text-slate-300' :
+                          'border-white/5 bg-white/2 text-slate-600 cursor-default'}`;
+                    card.onclick = () => {
+                        if (cam.is_processed) enterCameraMode(cam.camera_id, cam.display_name);
+                    };
+                    card.innerHTML = `
+                        <span class="text-[10px] font-bold uppercase tracking-wider truncate w-full">${cam.display_name}</span>
+                        <span class="text-xl font-extrabold font-mono">${cam.visitor_count}</span>
+                        <span class="text-[9px] ${cam.is_processed ? 'text-accentGreen' : 'text-slate-600'} font-semibold uppercase">
+                            ${cam.is_processed ? '● Live' : '○ Not Run'}
+                        </span>
+                    `;
+                    strip.appendChild(card);
+                });
+            } catch(e) {
+                console.error('Camera strip fetch failed', e);
+            }
+        }
+
+        // Open the Camera Selector modal
         async function triggerSimulation() {
             const modal = document.getElementById('video-modal');
             const modalContent = document.getElementById('video-modal-content');
-            
             modal.classList.remove('hidden');
             setTimeout(() => {
                 modal.classList.remove('opacity-0');
                 modalContent.classList.remove('scale-95');
                 modalContent.classList.add('scale-100');
             }, 10);
-
-            showVideoList(); // Default to list view
+            showCameraSelector();
         }
 
-        async function showVideoList() {
-            const loading = document.getElementById('video-loading');
-            const listContainer = document.getElementById('video-list-container');
-            const previewContainer = document.getElementById('video-preview-container');
-            const emptyContainer = document.getElementById('video-empty');
-            const desc = document.getElementById('video-modal-desc');
+        async function showCameraSelector() {
+            const loading = document.getElementById('cam-selector-loading');
+            const grid = document.getElementById('cam-selector-grid');
+            const preview = document.getElementById('video-preview-container');
             const player = document.getElementById('video-player');
+            player.pause(); player.src = '';
+            preview.classList.add('hidden');
+            grid.classList.add('hidden');
+            loading.classList.remove('hidden');
 
-            // Pause video if playing
-            player.pause();
-            player.src = "";
+            try {
+                const res = await fetch(`/stores/${storeId}/cameras`);
+                const cameras = await res.json();
+                loading.classList.add('hidden');
+                grid.innerHTML = '';
+                grid.classList.remove('hidden');
 
-            previewContainer.classList.add('hidden');
-            emptyContainer.classList.add('hidden');
-            desc.classList.remove('hidden');
-            
-            // Only fetch if empty to save time
-            if (listContainer.children.length === 0) {
-                loading.classList.remove('hidden');
-                listContainer.classList.add('hidden');
-
-                try {
-                    const response = await fetch('/api/videos');
-                    const data = await response.json();
+                cameras.forEach(cam => {
+                    const card = document.createElement('div');
+                    card.className = `flex items-center gap-4 p-4 rounded-xl border transition-all duration-200
+                        ${cam.is_processed ? 'border-white/10 bg-white/5 hover:border-indigo-400/30' : 'border-white/5 bg-white/2 opacity-60'}`;
                     
-                    loading.classList.add('hidden');
-                    
-                    if (data.videos && data.videos.length > 0) {
-                        listContainer.classList.remove('hidden');
-                        
-                        data.videos.forEach(video => {
-                            const videoRow = document.createElement('div');
-                            videoRow.className = "flex items-center gap-2 w-full";
-                            
-                            // Preview Button
-                            const previewBtn = document.createElement('button');
-                            previewBtn.className = "flex-1 flex items-center justify-between p-3 bg-white/5 border border-white/5 hover:border-accentBlue/50 hover:bg-white/10 rounded-xl transition-all duration-200 group text-left";
-                            previewBtn.onclick = () => previewVideo(video);
-                            previewBtn.innerHTML = `
-                                <div class="flex items-center gap-3">
-                                    <div class="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/40 group-hover:text-white transition-colors">
-                                        <i data-lucide="eye" class="w-4 h-4"></i>
-                                    </div>
-                                    <span class="text-sm font-semibold text-slate-200">${video}</span>
-                                </div>
-                                <span class="text-[10px] uppercase font-bold text-slate-500 group-hover:text-accentBlue transition-colors">Preview</span>
-                            `;
-                            
-                            // Quick Run Button
-                            const runBtn = document.createElement('button');
-                            runBtn.className = "p-3 bg-white/5 border border-white/5 hover:border-accentGreen/50 hover:bg-accentGreen/20 text-slate-400 hover:text-accentGreen rounded-xl transition-all duration-200";
-                            runBtn.onclick = () => startSimulation(video);
-                            runBtn.innerHTML = `<i data-lucide="play" class="w-5 h-5"></i>`;
-                            
-                            videoRow.appendChild(previewBtn);
-                            videoRow.appendChild(runBtn);
-                            listContainer.appendChild(videoRow);
-                        });
-                        lucide.createIcons();
-                    } else {
-                        emptyContainer.classList.remove('hidden');
-                    }
-                } catch (err) {
-                    console.error("Failed to fetch videos", err);
-                    loading.classList.add('hidden');
-                    emptyContainer.classList.remove('hidden');
-                }
-            } else {
-                listContainer.classList.remove('hidden');
+                    const statusBadge = cam.is_processed
+                        ? `<span class="text-[10px] font-bold text-accentGreen bg-accentGreen/10 border border-accentGreen/20 px-2 py-0.5 rounded-full uppercase">✓ Processed</span>`
+                        : `<span class="text-[10px] font-bold text-slate-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full uppercase">○ Not Run</span>`;
+
+                    const lastProcessed = cam.last_processed
+                        ? `<span class="text-[9px] text-slate-500">Last: ${new Date(cam.last_processed).toLocaleTimeString()}</span>`
+                        : '';
+
+                    card.innerHTML = `
+                        <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
+                            <i data-lucide="${cam.icon}" class="w-5 h-5"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-sm font-bold text-white">${cam.display_name}</span>
+                                ${statusBadge}
+                            </div>
+                            <div class="flex items-center gap-3 mt-1">
+                                <span class="text-xs text-slate-400">👥 ${cam.visitor_count} visitors</span>
+                                <span class="text-xs text-slate-500">${cam.event_count} events</span>
+                                ${lastProcessed}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${cam.is_processed ? `
+                                <button onclick="previewVideo('${cam.video_file}')" class="p-2 rounded-lg bg-white/5 border border-white/10 hover:border-indigo-400/50 text-slate-400 hover:text-indigo-300 transition-all" title="Preview video">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="enterCameraMode('${cam.camera_id}', '${cam.display_name}')" class="px-3 py-2 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-xs font-bold text-white transition-all flex items-center gap-1.5">
+                                    <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i> View Data
+                                </button>
+                                <button onclick="startSimulation('${cam.video_file}', true)" class="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-300 transition-all flex items-center gap-1.5" title="Re-run pipeline">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                                </button>
+                            ` : `
+                                <button onclick="startSimulation('${cam.video_file}', false)" class="px-3 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 text-xs font-bold text-white transition-all flex items-center gap-1.5">
+                                    <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Pipeline
+                                </button>
+                            `}
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+                lucide.createIcons();
+            } catch(e) {
+                console.error('Camera selector failed', e);
+                loading.innerHTML = '<span class="text-rose-400 text-xs">Failed to load cameras.</span>';
             }
         }
 
         function previewVideo(videoName) {
-            const listContainer = document.getElementById('video-list-container');
+            const grid = document.getElementById('cam-selector-grid');
             const previewContainer = document.getElementById('video-preview-container');
-            const desc = document.getElementById('video-modal-desc');
             const player = document.getElementById('video-player');
             const confirmBtn = document.getElementById('btn-confirm-video');
-
-            listContainer.classList.add('hidden');
-            desc.classList.add('hidden');
+            grid.classList.add('hidden');
             previewContainer.classList.remove('hidden');
-
-            // Load and play video
             player.src = `/api/video_stream/${videoName}`;
             player.play();
-
-            // Set up confirm button
-            confirmBtn.onclick = () => startSimulation(videoName);
+            confirmBtn.onclick = () => startSimulation(videoName, false);
         }
 
         function closeVideoModal() {
             const modal = document.getElementById('video-modal');
             const modalContent = document.getElementById('video-modal-content');
             const player = document.getElementById('video-player');
-            
             player.pause();
-            player.src = "";
-            
+            player.src = '';
             modal.classList.add('opacity-0');
             modalContent.classList.remove('scale-100');
             modalContent.classList.add('scale-95');
             setTimeout(() => modal.classList.add('hidden'), 300);
         }
 
+
         // Trigger Live HF Simulation
         let simInterval = null;
-        async function startSimulation(videoName) {
+        async function startSimulation(videoName, forceRerun = false) {
             closeVideoModal();
             
             const btn = document.getElementById('btn-run-simulation');
@@ -1361,12 +1415,32 @@
             try {
                 const response = await fetch('/api/simulate', { 
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ video: videoName })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ video: videoName, force: forceRerun })
                 });
                 
+                const data = await response.json();
+
+                // Smart cache: already processed — just enter camera mode
+                if (data.status === 'already_processed') {
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                    lucide.createIcons();
+                    // Show a brief notification
+                    btn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i> Already Processed`;
+                    btn.classList.replace('bg-pink-600', 'bg-indigo-600');
+                    lucide.createIcons();
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.classList.replace('bg-indigo-600', 'bg-pink-600');
+                        lucide.createIcons();
+                    }, 2500);
+                    // Enter camera mode for that camera automatically
+                    enterCameraMode(data.camera_id, videoName.replace('_camera.mp4','').replace('_',' ').replace('main floor','Main Floor ').replace(/\b\w/g, c => c.toUpperCase()));
+                    fetchCameraStrip();
+                    return;
+                }
+
                 if (response.ok) {
                     btn.classList.replace('bg-pink-600', 'bg-accentGreen');
                     btn.classList.replace('hover:bg-pink-500', 'hover:bg-accentGreen');
@@ -1381,12 +1455,11 @@
                             if (pData.percent !== undefined) {
                                 btn.innerHTML = `<i data-lucide="activity" class="w-4 h-4"></i> Processing: ${pData.percent}%`;
                                 lucide.createIcons();
-                                
-                                // Update button background as a progress bar effect
                                 btn.style.background = `linear-gradient(90deg, #10B981 ${pData.percent}%, #059669 ${pData.percent}%)`;
 
                                 if (pData.status === 'done' || pData.percent >= 100) {
                                     clearInterval(simInterval);
+                                    fetchCameraStrip(); // Refresh camera strip counts
                                     btn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i> Complete';
                                     lucide.createIcons();
                                     setTimeout(() => {
@@ -1409,6 +1482,7 @@
                 console.error("Simulation trigger failed", err);
                 btn.innerHTML = originalHTML;
                 btn.classList.remove('opacity-75', 'cursor-not-allowed');
+
                 lucide.createIcons();
             }
         }
@@ -1441,6 +1515,10 @@
                 }
             }, 2000);
             fetchDashboardData();
+
+            // Camera strip (per-camera people count) — refresh every 5s
+            fetchCameraStrip();
+            setInterval(fetchCameraStrip, 5000);
 
             // Poll live camera log stream every 1.5 seconds
             setInterval(fetchLiveFeed, 1500);

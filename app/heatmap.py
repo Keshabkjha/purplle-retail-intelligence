@@ -1,42 +1,39 @@
+from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from app.database import DBEvent
 from app.metrics import parse_timestamp
 
 
-def get_store_heatmap_data(store_id: str, db: Session):
-    # 1. Fetch all customer events
-    events = (
-        db.query(DBEvent)
-        .filter(
-            DBEvent.store_id == store_id,
-            DBEvent.is_staff.is_(False),
-            DBEvent.zone_id.isnot(None),
-            DBEvent.zone_id != "ENTRY",
-            DBEvent.zone_id != "EXIT",
-        )
-        .order_by(DBEvent.timestamp)
-        .all()
+def get_store_heatmap_data(store_id: str, db: Session, camera_id: Optional[str] = None):
+    # 1. Fetch all customer events (excluding ENTRY/EXIT zones)
+    query = db.query(DBEvent).filter(
+        DBEvent.store_id == store_id,
+        DBEvent.is_staff.is_(False),
+        DBEvent.zone_id.isnot(None),
+        DBEvent.zone_id != "ENTRY",
+        DBEvent.zone_id != "EXIT",
     )
+    if camera_id:
+        query = query.filter(DBEvent.camera_id == camera_id)
+
+    events = query.order_by(DBEvent.timestamp).all()
 
     # Get total unique sessions to set data_confidence
-    unique_sessions = (
-        db.query(DBEvent.visitor_id)
-        .filter(DBEvent.store_id == store_id, DBEvent.is_staff.is_(False))
-        .distinct()
-        .count()
+    sessions_query = db.query(DBEvent.visitor_id).filter(
+        DBEvent.store_id == store_id, DBEvent.is_staff.is_(False)
     )
+    if camera_id:
+        sessions_query = sessions_query.filter(DBEvent.camera_id == camera_id)
+    unique_sessions = sessions_query.distinct().count()
 
     data_confidence = unique_sessions >= 20
 
     if not events:
-        return {"store_id": store_id, "zones": [], "data_confidence": data_confidence}
+        return {"store_id": store_id, "camera_id": camera_id, "zones": [], "data_confidence": data_confidence}
 
-    # Group events by zone and visitor
     zone_data = {}
-
-    # Track entries and exits to calculate duration if dwell_ms is 0
-    # format: { (visitor_id, zone_id): [enter_time, exit_time/dwells] }
     visitor_zone_visits = {}
 
     for ev in events:
@@ -48,11 +45,9 @@ def get_store_heatmap_data(store_id: str, db: Session):
 
         zone_data[zone]["visitors"].add(vid)
 
-        # Accumulate dwell_ms if positive
-        if ev.dwell_ms > 0:
+        if ev.dwell_ms and ev.dwell_ms > 0:
             zone_data[zone]["dwell_ms_list"].append(ev.dwell_ms)
 
-        # Also track enter/exit timestamps
         key = (vid, zone)
         if key not in visitor_zone_visits:
             visitor_zone_visits[key] = {"enter": None, "exit": None, "last_timestamp": None}
@@ -65,7 +60,6 @@ def get_store_heatmap_data(store_id: str, db: Session):
             elif ev.event_type == "ZONE_EXIT":
                 visitor_zone_visits[key]["exit"] = dt
 
-    # If dwell_ms is missing, supplement with calculated enter-exit time
     for (vid, zone), times in visitor_zone_visits.items():
         if zone in zone_data:
             calc_ms = 0
@@ -77,7 +71,6 @@ def get_store_heatmap_data(store_id: str, db: Session):
             if calc_ms > 0:
                 zone_data[zone]["dwell_ms_list"].append(calc_ms)
 
-    # Compile zone metrics
     zones_list = []
     max_visits = 0
 
@@ -97,13 +90,12 @@ def get_store_heatmap_data(store_id: str, db: Session):
                 "zone_id": zone,
                 "visit_count": visit_count,
                 "average_dwell_seconds": avg_dwell_sec,
-                "intensity": 0.0,  # normalize later
+                "intensity": 0.0,
             }
         )
 
-    # Normalize intensity
     for z in zones_list:
         if max_visits > 0:
             z["intensity"] = round(100.0 * z["visit_count"] / max_visits, 2)
 
-    return {"store_id": store_id, "zones": zones_list, "data_confidence": data_confidence}
+    return {"store_id": store_id, "camera_id": camera_id, "zones": zones_list, "data_confidence": data_confidence}

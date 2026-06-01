@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Deque, Dict, List, Tuple
+from typing import Any, Deque, Dict, List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -332,12 +332,12 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
 @app.get("/metrics")
 def get_global_metrics(db: Session = Depends(get_db)):
     """Global alias for evaluation script to hit the metrics endpoint."""
-    return get_store_metrics("ST1008", db)
+    return get_store_metrics("ST1008", None, db)
 
 @app.get("/stores/{store_id}/metrics")
-def get_store_metrics(store_id: str, db: Session = Depends(get_db)):
+def get_store_metrics(store_id: str, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        return get_store_metrics_data(store_id, db)
+        return get_store_metrics_data(store_id, db, camera_id)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -346,9 +346,9 @@ def get_store_metrics(store_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stores/{store_id}/funnel")
-def get_store_funnel(store_id: str, db: Session = Depends(get_db)):
+def get_store_funnel(store_id: str, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        return get_store_funnel_data(store_id, db)
+        return get_store_funnel_data(store_id, db, camera_id)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -357,14 +357,56 @@ def get_store_funnel(store_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stores/{store_id}/heatmap")
-def get_store_heatmap(store_id: str, db: Session = Depends(get_db)):
+def get_store_heatmap(store_id: str, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        return get_store_heatmap_data(store_id, db)
+        return get_store_heatmap_data(store_id, db, camera_id)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to calculate store heatmap: {str(e)}",
         )
+
+
+@app.get("/stores/{store_id}/cameras")
+def get_store_cameras(store_id: str, db: Session = Depends(get_db)):
+    """Returns per-camera stats: visitor count, event count, processed status."""
+    CAMERA_META = {
+        "CAM_ENTRY_01":   {"display_name": "Entry Camera",   "video_file": "entry_camera.mp4",   "icon": "door-open"},
+        "CAM_MAIN_01":    {"display_name": "Main Floor 1",   "video_file": "main_floor_1.mp4",   "icon": "store"},
+        "CAM_MAIN_02":    {"display_name": "Main Floor 2",   "video_file": "main_floor_2.mp4",   "icon": "store"},
+        "CAM_MAIN_03":    {"display_name": "Main Floor 3",   "video_file": "main_floor_3.mp4",   "icon": "store"},
+        "CAM_BILLING_01": {"display_name": "Billing Counter", "video_file": "billing_camera.mp4", "icon": "credit-card"},
+    }
+    all_cameras = list(CAMERA_META.keys())
+    result = []
+    for cam_id in all_cameras:
+        meta = CAMERA_META[cam_id]
+        visitor_count = (
+            db.query(DBEvent.visitor_id)
+            .filter(DBEvent.store_id == store_id, DBEvent.camera_id == cam_id, DBEvent.is_staff.is_(False))
+            .distinct().count()
+        )
+        event_count = (
+            db.query(DBEvent)
+            .filter(DBEvent.store_id == store_id, DBEvent.camera_id == cam_id)
+            .count()
+        )
+        last_event = (
+            db.query(DBEvent)
+            .filter(DBEvent.store_id == store_id, DBEvent.camera_id == cam_id)
+            .order_by(DBEvent.timestamp.desc()).first()
+        )
+        result.append({
+            "camera_id": cam_id,
+            "display_name": meta["display_name"],
+            "video_file": meta["video_file"],
+            "icon": meta["icon"],
+            "visitor_count": visitor_count,
+            "event_count": event_count,
+            "last_processed": last_event.timestamp if last_event else None,
+            "is_processed": event_count > 0,
+        })
+    return result
 
 
 @app.get("/stores/{store_id}/anomalies")
@@ -379,15 +421,12 @@ def get_store_anomalies(store_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stores/{store_id}/recent-events")
-def get_store_recent_events(store_id: str, limit: int = 15, db: Session = Depends(get_db)):
+def get_store_recent_events(store_id: str, limit: int = 15, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        events = (
-            db.query(DBEvent)
-            .filter(DBEvent.store_id == store_id)
-            .order_by(DBEvent.timestamp.desc())
-            .limit(limit)
-            .all()
-        )
+        query = db.query(DBEvent).filter(DBEvent.store_id == store_id)
+        if camera_id:
+            query = query.filter(DBEvent.camera_id == camera_id)
+        events = query.order_by(DBEvent.timestamp.desc()).limit(limit).all()
 
         result = []
         for e in events:
@@ -487,9 +526,42 @@ def stream_video(video_name: str):
 
 
 @app.post("/api/simulate")
-def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks):
+def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Trigger the live CV pipeline in the background on a specific video."""
     import json
+
+    # Smart cache: map video filename to camera_id
+    VIDEO_TO_CAM = {
+        "entry_camera.mp4":   "CAM_ENTRY_01",
+        "main_floor_1.mp4":   "CAM_MAIN_01",
+        "main_floor_2.mp4":   "CAM_MAIN_02",
+        "main_floor_3.mp4":   "CAM_MAIN_03",
+        "billing_camera.mp4": "CAM_BILLING_01",
+    }
+    safe_video = os.path.basename(req.video)
+    cam_id = VIDEO_TO_CAM.get(safe_video)
+
+    # Check if already processed
+    if cam_id:
+        existing_count = (
+            db.query(DBEvent)
+            .filter(DBEvent.camera_id == cam_id)
+            .count()
+        )
+        if existing_count > 0:
+            visitor_count = (
+                db.query(DBEvent.visitor_id)
+                .filter(DBEvent.camera_id == cam_id, DBEvent.is_staff.is_(False))
+                .distinct().count()
+            )
+            return {
+                "status": "already_processed",
+                "camera_id": cam_id,
+                "video": safe_video,
+                "event_count": existing_count,
+                "visitor_count": visitor_count,
+            }
+
     try:
         with open("pipeline/simulation_progress.json", "w") as f:
             json.dump({"status": "starting", "percent": 0, "video": req.video}, f)

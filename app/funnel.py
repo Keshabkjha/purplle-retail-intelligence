@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -6,18 +7,20 @@ from app.database import DBPOS, DBEvent
 from app.metrics import parse_timestamp
 
 
-def get_store_funnel_data(store_id: str, db: Session):
+def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] = None):
     # 1. Fetch all customer events
-    events = (
-        db.query(DBEvent)
-        .filter(DBEvent.store_id == store_id, DBEvent.is_staff.is_(False))
-        .order_by(DBEvent.timestamp)
-        .all()
+    query = db.query(DBEvent).filter(
+        DBEvent.store_id == store_id, DBEvent.is_staff.is_(False)
     )
+    if camera_id:
+        query = query.filter(DBEvent.camera_id == camera_id)
+
+    events = query.order_by(DBEvent.timestamp).all()
 
     if not events:
         return {
             "store_id": store_id,
+            "camera_id": camera_id,
             "funnel": {"entry": 0, "zone_visit": 0, "billing_queue": 0, "purchase": 0},
             "dropoff_percentages": {
                 "entry_to_zone": 0.0,
@@ -26,7 +29,6 @@ def get_store_funnel_data(store_id: str, db: Session):
             },
         }
 
-    # Group events by visitor_id
     sessions = {}
     for ev in events:
         vid = ev.visitor_id
@@ -42,17 +44,14 @@ def get_store_funnel_data(store_id: str, db: Session):
         if dt:
             txn_times.append(dt)
 
-    # Count stages
     entry_count = 0
     zone_visit_count = 0
     billing_queue_count = 0
     purchase_count = 0
 
     for vid, ev_list in sessions.items():
-        # Step 1: Entry - Every visitor session in the database counts as an entry
         entry_count += 1
 
-        # Step 2: Zone Visit - has visited at least one retail zone (excluding ENTRY, EXIT, BILLING)
         has_visited_retail = False
         for ev in ev_list:
             if ev.zone_id and ev.zone_id not in ("ENTRY", "EXIT", "BILLING"):
@@ -61,7 +60,6 @@ def get_store_funnel_data(store_id: str, db: Session):
         if has_visited_retail:
             zone_visit_count += 1
 
-        # Step 3: Billing Queue - has visited the BILLING zone
         has_visited_billing = False
         billing_visits = []
         for ev in ev_list:
@@ -76,7 +74,6 @@ def get_store_funnel_data(store_id: str, db: Session):
         if has_visited_billing:
             billing_queue_count += 1
 
-        # Step 4: Purchase - has completed a purchase via POS correlation
         is_converted = False
         if has_visited_billing:
             for b_time in billing_visits:
@@ -89,7 +86,6 @@ def get_store_funnel_data(store_id: str, db: Session):
         if is_converted:
             purchase_count += 1
 
-    # Drop-off percentages
     entry_to_zone = 0.0
     if entry_count > 0:
         entry_to_zone = round(100.0 * (1.0 - (zone_visit_count / entry_count)), 2)
@@ -104,6 +100,7 @@ def get_store_funnel_data(store_id: str, db: Session):
 
     return {
         "store_id": store_id,
+        "camera_id": camera_id,
         "funnel": {
             "entry": entry_count,
             "zone_visit": zone_visit_count,

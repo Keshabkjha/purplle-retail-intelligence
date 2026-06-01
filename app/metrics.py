@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -8,7 +9,6 @@ from app.database import DBPOS, DBEvent
 
 def parse_timestamp(ts_str):
     try:
-        # Standard format: '2026-03-03T14:22:10Z' or similar
         return datetime.strptime(ts_str.replace("Z", ""), "%Y-%m-%dT%H:%M:%S")
     except Exception:
         try:
@@ -17,18 +17,20 @@ def parse_timestamp(ts_str):
             return None
 
 
-def get_store_metrics_data(store_id: str, db: Session):
+def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] = None):
     # 1. Fetch all events for the store that are not staff
-    events = (
-        db.query(DBEvent)
-        .filter(DBEvent.store_id == store_id, DBEvent.is_staff.is_(False))
-        .order_by(DBEvent.timestamp)
-        .all()
+    query = db.query(DBEvent).filter(
+        DBEvent.store_id == store_id, DBEvent.is_staff.is_(False)
     )
+    if camera_id:
+        query = query.filter(DBEvent.camera_id == camera_id)
+
+    events = query.order_by(DBEvent.timestamp).all()
 
     if not events:
         return {
             "store_id": store_id,
+            "camera_id": camera_id,
             "unique_visitors": 0,
             "conversion_rate": 0.0,
             "average_dwell_minutes": 0.0,
@@ -60,7 +62,6 @@ def get_store_metrics_data(store_id: str, db: Session):
     billing_visitor_ids = set()
 
     for vid, ev_list in sessions.items():
-        # Segment into visits (split on ENTRY or REENTRY events) to avoid double counting out-of-store time gaps
         visits = []
         current_visit = []
         for ev in ev_list:
@@ -71,7 +72,6 @@ def get_store_metrics_data(store_id: str, db: Session):
         if current_visit:
             visits.append(current_visit)
 
-        # Get dwell time (accumulated across discrete visits)
         for visit in visits:
             first_time = parse_timestamp(visit[0].timestamp)
             last_time = parse_timestamp(visit[-1].timestamp)
@@ -79,7 +79,6 @@ def get_store_metrics_data(store_id: str, db: Session):
                 dwell_sec = (last_time - first_time).total_seconds()
                 total_dwell_seconds += max(dwell_sec, 0.0)
 
-        # Check if they visited the billing zone
         billing_visits = []
         for ev in ev_list:
             if ev.zone_id == "BILLING" or ev.event_type in (
@@ -91,11 +90,9 @@ def get_store_metrics_data(store_id: str, db: Session):
                     billing_visits.append(dt)
                     billing_visitor_ids.add(vid)
 
-        # Correlate with POS: billing visit within 5 minutes before transaction
         is_converted = False
         for b_time in billing_visits:
             for t_time in txn_times:
-                # 5-minute window: b_time <= t_time <= b_time + 5 mins
                 if b_time <= t_time <= b_time + timedelta(minutes=5):
                     is_converted = True
                     break
@@ -105,29 +102,25 @@ def get_store_metrics_data(store_id: str, db: Session):
         if is_converted:
             converted_visitors.add(vid)
 
-    # Conversion Rate
     conversion_rate = 0.0
     if unique_visitors > 0:
         conversion_rate = round(100.0 * len(converted_visitors) / unique_visitors, 2)
 
-    # Average Dwell Minutes
     avg_dwell_minutes = 0.0
     if unique_visitors > 0:
         avg_dwell_minutes = round((total_dwell_seconds / 60.0) / unique_visitors, 2)
 
     # Current Queue Depth
-    # Find latest BILLING_QUEUE_JOIN or any event with queue depth
-    latest_queue_event = (
-        db.query(DBEvent)
-        .filter(DBEvent.store_id == store_id, DBEvent.event_type == "BILLING_QUEUE_JOIN")
-        .order_by(DBEvent.timestamp.desc())
-        .first()
+    q_query = db.query(DBEvent).filter(
+        DBEvent.store_id == store_id, DBEvent.event_type == "BILLING_QUEUE_JOIN"
     )
+    if camera_id:
+        q_query = q_query.filter(DBEvent.camera_id == camera_id)
+    latest_queue_event = q_query.order_by(DBEvent.timestamp.desc()).first()
 
     current_queue_depth = 0
     if latest_queue_event and latest_queue_event.metadata_json:
         try:
-            # metadata_json might be string or dict depending on driver/SQLite JSON behavior
             meta = latest_queue_event.metadata_json
             if isinstance(meta, str):
                 meta = json.loads(meta)
@@ -135,8 +128,6 @@ def get_store_metrics_data(store_id: str, db: Session):
         except Exception:
             pass
 
-    # Abandonment Rate
-    # billing queue abandonment = joined billing but did not purchase
     total_billing_visitors = len(billing_visitor_ids)
     converted_billing_visitors = len(billing_visitor_ids.intersection(converted_visitors))
 
@@ -145,9 +136,7 @@ def get_store_metrics_data(store_id: str, db: Session):
         abandoned_count = total_billing_visitors - converted_billing_visitors
         abandonment_rate = round(100.0 * abandoned_count / total_billing_visitors, 2)
 
-    # Per-Zone Dwell Breakdown
-    # Compute average dwell seconds per zone from ZONE_DWELL and ZONE_EXIT events
-    zone_dwell_secs = {}  # zone_id -> list of dwell_ms values
+    zone_dwell_secs = {}
     for ev in events:
         if ev.zone_id and ev.dwell_ms and ev.dwell_ms > 0:
             if ev.event_type in (
@@ -167,6 +156,7 @@ def get_store_metrics_data(store_id: str, db: Session):
 
     return {
         "store_id": store_id,
+        "camera_id": camera_id,
         "unique_visitors": unique_visitors,
         "conversion_rate": conversion_rate,
         "average_dwell_minutes": avg_dwell_minutes,
