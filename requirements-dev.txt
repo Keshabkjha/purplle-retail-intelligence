@@ -161,7 +161,7 @@ pillow==12.2.0
     #   matplotlib
     #   torchvision
     #   ultralytics
-pip-tools==7.4.1
+pip-tools==7.5.3
     # via -r requirements-dev.in
 platformdirs==4.10.0
     # via
