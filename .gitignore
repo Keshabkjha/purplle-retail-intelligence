@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.*
+*.env
+
+# Database (do not commit production data)
+store_intelligence.db
+*.db
+*.sqlite
+*.sqlite3
+*-journal
+*-wal
+*-shm
+
+# Model weights and state (large binary — download separately or dynamically generated)
+*.pt
+*.onnx
+*.pkl
+
+# CCTV footage (large media files — not for version control)
+CCTV Footage/
+annotated_*.mp4
+
+# Annotated output videos from pipeline
+annotated_*.mp4
+annotated_*.avi
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Test and lint artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+.tox/
+
+# Docker
+.docker/
+
+# Logs
+*.log
+logs/
+
+# Challenge PDFs and datasets (keep in your local workspace)
+*.pdf
+*.xlsx
+*.csv
+
+# Transient state files
+pipeline/session_state.json
+session_state.json

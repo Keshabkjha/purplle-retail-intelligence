@@ -1,0 +1,18 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api.Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+    environment:
+      - DATABASE_URL=sqlite:///./store_intelligence.db
+      - ENV=dev
+      - ALLOWED_ORIGINS=*
+      - RATE_LIMIT_PER_MINUTE=0
+      - RATE_LIMIT_WINDOW_SECONDS=60
+      - MAX_INGEST_BATCH=500
+      - PORT=8000
+    restart: always
