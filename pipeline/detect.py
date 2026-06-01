@@ -23,6 +23,12 @@ def patched_load(*args, **kwargs):
 
 torch.load = patched_load
 
+from pipeline.adaptive_models import (
+    AdaptiveModelRegistry,
+    build_identity_feature_vector,
+    build_staff_feature_vector,
+)
+
 # Load layouts
 LAYOUT_PATH = "config/store_layout.json"
 CALIBRATION_PATH = "config/calibration.json"
@@ -60,6 +66,8 @@ if os.path.exists(CALIBRATION_PATH):
             calibration = json.load(f)
     except Exception as e:
         print(f"Error loading calibration: {e}")
+
+MODEL_REGISTRY = AdaptiveModelRegistry()
 
 def point_in_polygon(x, y, polygon):
     """Ray casting algorithm for point-in-polygon test."""
@@ -171,6 +179,89 @@ def is_staff_heuristic(track_id, bbox, frame):
         
     return False
 
+def compute_appearance_embedding(crop):
+    """Extract a lightweight normalized HSV color histogram as an appearance embedding."""
+    try:
+        if crop is None or crop.size == 0:
+            return None
+        # Convert to HSV color space
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        # 3D HSV histogram: 8 Hue bins, 4 Saturation bins, 4 Value bins
+        hist = cv2.calcHist([hsv], [0, 1, 2], None, [8, 4, 4], [0, 180, 0, 256, 0, 256])
+        cv2.normalize(hist, hist)
+        return hist.flatten().tolist()
+    except Exception:
+        return None
+
+def compare_appearance(hist1, hist2):
+    """Compare two appearance embeddings using correlation (1.0 is perfect match)."""
+    if not hist1 or not hist2:
+        return 0.0
+    try:
+        h1 = np.array(hist1, dtype=np.float32)
+        h2 = np.array(hist2, dtype=np.float32)
+        h1_norm = h1 - np.mean(h1)
+        h2_norm = h2 - np.mean(h2)
+        denom = np.sqrt(np.sum(h1_norm**2) * np.sum(h2_norm**2))
+        if denom < 1e-6:
+            return 0.0
+        return float(np.sum(h1_norm * h2_norm) / denom)
+    except Exception:
+        return 0.0
+
+def camera_transition_prior(previous_camera_id, current_camera_id):
+    """Return a soft prior for whether a camera transition is operationally plausible."""
+    if not previous_camera_id or not current_camera_id or previous_camera_id == current_camera_id:
+        return 0.0
+
+    transition_map = {
+        "CAM_ENTRY_01": {
+            "CAM_MAIN_01": 0.95,
+            "CAM_MAIN_02": 0.90,
+            "CAM_MAIN_03": 0.90,
+            "CAM_BILLING_01": 0.75,
+        },
+        "CAM_MAIN_01": {
+            "CAM_ENTRY_01": 0.90,
+            "CAM_MAIN_02": 0.88,
+            "CAM_MAIN_03": 0.88,
+            "CAM_BILLING_01": 0.85,
+        },
+        "CAM_MAIN_02": {
+            "CAM_ENTRY_01": 0.90,
+            "CAM_MAIN_01": 0.88,
+            "CAM_MAIN_03": 0.88,
+            "CAM_BILLING_01": 0.85,
+        },
+        "CAM_MAIN_03": {
+            "CAM_ENTRY_01": 0.90,
+            "CAM_MAIN_01": 0.88,
+            "CAM_MAIN_02": 0.88,
+            "CAM_BILLING_01": 0.85,
+        },
+        "CAM_BILLING_01": {
+            "CAM_ENTRY_01": 0.80,
+            "CAM_MAIN_01": 0.90,
+            "CAM_MAIN_02": 0.90,
+            "CAM_MAIN_03": 0.90,
+        },
+    }
+
+    return transition_map.get(previous_camera_id, {}).get(current_camera_id, 0.60)
+
+
+def zone_transition_prior(previous_zone_id, current_zone_id):
+    """Return a soft prior for whether a zone transition is plausible."""
+    if not previous_zone_id or not current_zone_id:
+        return 0.50
+    if previous_zone_id == current_zone_id:
+        return 1.0
+    if "ENTRY" in (previous_zone_id, current_zone_id):
+        return 0.85
+    if "BILLING" in (previous_zone_id, current_zone_id):
+        return 0.90
+    return 0.80
+
 class CrossCameraSessionTracker:
     def __init__(self, state_file="pipeline/session_state.json"):
         self.state_file = state_file
@@ -207,8 +298,26 @@ class CrossCameraSessionTracker:
                     return True
         return False
 
-    def get_unified_id(self, track_id, camera_id, wx, wy, current_time, is_staff_initial):
-        """Maps a local camera track_id to a globally consistent unified visitor_id."""
+    def get_unified_id(self, track_id, camera_id, wx, wy, current_time, is_staff_initial, box=None, frame=None, zone_id=None):
+        """Maps a local camera track_id to a globally consistent unified visitor_id using spatial, temporal, and visual cues."""
+        track_id = int(track_id)
+        wx = float(wx)
+        wy = float(wy)
+        # Calculate appearance embedding if crop is provided
+        emb = None
+        if box is not None and frame is not None:
+            try:
+                x1, y1, x2, y2 = map(int, box)
+                h, w = frame.shape[:2]
+                crop = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+                if crop is not None and crop.size > 0:
+                    # Focus on the upper torso, which is usually the most stable clothing region.
+                    torso_h = max(1, int(crop.shape[0] * 0.65))
+                    crop = crop[:torso_h, :]
+                emb = compute_appearance_embedding(crop)
+            except Exception:
+                pass
+
         if track_id in self.local_to_unified:
             unified_id = self.local_to_unified[track_id]
             if unified_id in self.sessions:
@@ -218,12 +327,27 @@ class CrossCameraSessionTracker:
                 sess["last_seen_x"] = wx
                 sess["last_seen_y"] = wy
                 sess["camera_track_ids"][camera_id] = track_id
+                if zone_id is not None:
+                    sess["last_zone_id"] = zone_id
+                
+                # Rolling update of visual embedding to handle camera angle / lighting changes
+                if emb is not None:
+                    old_emb = sess.get("appearance_embedding")
+                    if old_emb is not None:
+                        # 30% new visual signal, 70% rolling history
+                        updated = (0.7 * np.array(old_emb) + 0.3 * np.array(emb)).tolist()
+                        sess["appearance_embedding"] = updated
+                    else:
+                        sess["appearance_embedding"] = emb
+                    self.save_state()
             return unified_id
 
-        # Look for a spatial-temporal match in previously exited/seen visitors from other cameras
+        # Multi-signal match in previously exited/seen visitors from other cameras
         matched_id = None
-        min_dist = float('inf')
-        time_diff = 0.0
+        max_match_score = -1.0
+        best_dist = float('inf')
+        best_diff = 0.0
+        candidate_observations = []
 
         for uid, sess in self.sessions.items():
             if sess["last_seen_camera"] == camera_id:
@@ -239,14 +363,64 @@ class CrossCameraSessionTracker:
             if diff <= 30.0:  # 30-second window
                 lx, ly = sess["last_seen_x"], sess["last_seen_y"]
                 dist = np.sqrt((wx - lx)**2 + (wy - ly)**2)
-                # 150 pixels represents approx 2.5 meters on our 940x451 floor plan
-                if dist <= 150.0 and dist < min_dist:
-                    min_dist = dist
-                    matched_id = uid
-                    time_diff = diff
+                
+                if dist <= 150.0:  # 150-pixel spatial threshold (~2.5m)
+                    # 1. Spatial proximity score (higher is better)
+                    spatial_score = 1.0 - (dist / 150.0)
+                    
+                    # 2. Temporal closeness score
+                    temporal_score = 1.0 - (diff / 30.0)
+                    
+                    # 3. Visual appearance correlation score
+                    app_score = 0.5  # Neutral default if visual embedding is missing
+                    if emb is not None and sess.get("appearance_embedding") is not None:
+                        app_score = compare_appearance(emb, sess["appearance_embedding"])
+
+                    # 4. Camera transition prior (same store traversal path)
+                    cam_score = camera_transition_prior(sess["last_seen_camera"], camera_id)
+
+                    # 5. Zone compatibility prior
+                    zone_score = zone_transition_prior(sess.get("last_zone_id"), zone_id)
+
+                    feature_vec = build_identity_feature_vector(
+                        spatial_score=spatial_score,
+                        temporal_score=temporal_score,
+                        visual_score=app_score,
+                        camera_score=cam_score,
+                        zone_score=zone_score,
+                        dist_norm=dist / 150.0,
+                        time_norm=diff / 30.0,
+                    )
+                    
+                    # Unified multi-signal match score
+                    heuristic_score = (
+                        spatial_score * 0.30 +
+                        temporal_score * 0.22 +
+                        app_score * 0.26 +
+                        cam_score * 0.12 +
+                        zone_score * 0.10
+                    )
+                    learned_prob = MODEL_REGISTRY.predict_identity_probability(feature_vec, fallback=heuristic_score)
+                    match_score = (
+                        0.58 * heuristic_score +
+                        0.42 * learned_prob
+                    )
+                    candidate_observations.append((uid, feature_vec, match_score, heuristic_score, learned_prob))
+                    
+                    if match_score >= 0.65 and match_score > max_match_score:
+                        max_match_score = match_score
+                        matched_id = uid
+                        best_dist = dist
+                        best_diff = diff
 
         if matched_id:
-            print(f"🔗 [Re-ID Match] Track {track_id} in {camera_id} matched to {matched_id} (dist: {min_dist:.1f}px, time gap: {time_diff:.1f}s)")
+            print(f"🔗 [Re-ID Match] Track {track_id} in {camera_id} matched to {matched_id} (score: {max_match_score:.2f}, dist: {best_dist:.1f}px, gap: {best_diff:.1f}s)")
+            # Online learning: reinforce the selected match and penalize hard negatives.
+            for uid, feature_vec, match_score, heuristic_score, learned_prob in candidate_observations:
+                if uid == matched_id and match_score >= 0.65:
+                    MODEL_REGISTRY.identity_model.update(feature_vec, 1)
+                elif match_score >= 0.60 and uid != matched_id:
+                    MODEL_REGISTRY.identity_model.update(feature_vec, 0)
             self.local_to_unified[track_id] = matched_id
             sess = self.sessions[matched_id]
             sess["last_seen_camera"] = camera_id
@@ -254,9 +428,23 @@ class CrossCameraSessionTracker:
             sess["last_seen_x"] = wx
             sess["last_seen_y"] = wy
             sess["camera_track_ids"][camera_id] = track_id
+            if zone_id is not None:
+                sess["last_zone_id"] = zone_id
+            if emb is not None:
+                old_emb = sess.get("appearance_embedding")
+                if old_emb is not None:
+                    sess["appearance_embedding"] = (0.7 * np.array(old_emb) + 0.3 * np.array(emb)).tolist()
+                else:
+                    sess["appearance_embedding"] = emb
             self.save_state()
             return matched_id
         else:
+            # When no match is found, treat the strongest candidate as a negative example
+            if candidate_observations:
+                top_candidate = max(candidate_observations, key=lambda item: item[2])
+                if top_candidate[2] >= 0.60:
+                    MODEL_REGISTRY.identity_model.update(top_candidate[1], 0)
+
             new_id = f"VIS_{track_id}"
             base_new_id = new_id
             counter = 1
@@ -272,38 +460,94 @@ class CrossCameraSessionTracker:
                 "last_seen_x": wx,
                 "last_seen_y": wy,
                 "is_staff": is_staff_initial,
+                "last_zone_id": zone_id,
+                "appearance_embedding": emb,
                 "camera_track_ids": {camera_id: track_id}
             }
             self.save_state()
             return new_id
 
+
 def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_staff, tracker):
-    """Hybrid visual-behavioral staff classifier."""
+    """Hybrid visual-behavioral staff classifier with a lightweight learned model."""
     unified_is_staff_init = False
     camera_count = 1
     if tracker and vid in tracker.sessions:
         unified_is_staff_init = tracker.sessions[vid].get("is_staff", False)
         camera_count = len(tracker.sessions[vid].get("camera_track_ids", {}))
 
-    # Torso clothing color is a strong signal
+    # Base visual score: black uniform detection is strong but can have reflections/noise
+    # We assign 0.6 for uniform match, 0.0 otherwise
     staff_score = 0.6 if is_clothing_staff or unified_is_staff_init else 0.0
 
-    # Behavioral signals
+    # Behavioral boosts:
+    # 1. Physical location: Behind the billing register counter area (wx > 820)
+    if zone_id == "BILLING" and wx > 820:
+        staff_score += 0.4
+
+    # 2. Queue Dwell: Standing in billing zone for > 90 seconds (staff stays at register; shoppers checkout and leave)
     if zone_id == "BILLING":
-        if wx > 820:  # Behind the billing register counter
-            staff_score += 0.4
         billing_duration = (current_time - sess["enter_time"]).total_seconds()
         if billing_duration > 90:
             staff_score += 0.3
 
+    # Torso match ratio is a strong signal in our store because staff uniforms are dark.
+    torso_match_ratio = 1.0 if is_clothing_staff else 0.0
+
+    # 3. Store Dwell: Staff has much higher store presence duration than customers
     total_duration = (current_time - sess.get("first_seen_time", sess["enter_time"])).total_seconds()
     if total_duration > 180:
         staff_score += 0.3
 
+    # 4. Multi-camera activity (staff moves across cameras over long shifts)
     if camera_count >= 2:
         staff_score += 0.2
 
-    is_staff = staff_score >= 0.5
+    heuristic_prob = min(max(staff_score / 1.8, 0.0), 1.0)
+    feature_vec = build_staff_feature_vector(
+        torso_match_ratio=torso_match_ratio,
+        is_clothing_staff=is_clothing_staff,
+        zone_id=zone_id,
+        wx=wx,
+        billing_duration_sec=(current_time - sess["enter_time"]).total_seconds() if zone_id == "BILLING" else 0.0,
+        total_duration_sec=total_duration,
+        camera_count=camera_count,
+    )
+    learned_prob = MODEL_REGISTRY.predict_staff_probability(feature_vec, fallback=heuristic_prob)
+    combined_prob = (0.55 * learned_prob) + (0.45 * heuristic_prob)
+
+    # Robust multi-stage confidence resolve with hysteresis.
+    # Cold-start: rely on the conservative heuristic until the learned model has enough evidence.
+    if MODEL_REGISTRY.staff_model.update_count < 5:
+        if staff_score >= 0.6:
+            is_staff = True
+        elif staff_score < 0.4:
+            is_staff = False
+        else:
+            # Ambiguous band [0.4, 0.6): Resolve using spatiotemporal continuity
+            if total_duration > 120 or camera_count >= 2:
+                is_staff = True
+            else:
+                is_staff = False
+    else:
+        if combined_prob >= 0.62:
+            # High confidence staff
+            is_staff = True
+        elif combined_prob < 0.38:
+            # High confidence customer
+            is_staff = False
+        else:
+            # Ambiguous band [0.4, 0.6): Resolve using spatiotemporal continuity
+            if total_duration > 120 or camera_count >= 2:
+                is_staff = True
+            else:
+                is_staff = False
+
+    # Online learning: use high-confidence pseudo-labels to train the lightweight classifier.
+    if combined_prob >= 0.80 or staff_score >= 1.2:
+        MODEL_REGISTRY.staff_model.update(feature_vec, 1)
+    elif combined_prob <= 0.20 or staff_score <= 0.15:
+        MODEL_REGISTRY.staff_model.update(feature_vec, 0)
 
     if tracker and vid in tracker.sessions:
         tracker.sessions[vid]["is_staff"] = is_staff
@@ -421,7 +665,17 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                     is_staff_init = is_staff_heuristic(track_id, box, frame)
 
                     # Get globally consistent unified visitor ID
-                    vid = tracker.get_unified_id(track_id, camera_id, wx, wy, current_time, is_staff_init)
+                    vid = tracker.get_unified_id(
+                        track_id,
+                        camera_id,
+                        wx,
+                        wy,
+                        current_time,
+                        is_staff_init,
+                        box=box,
+                        frame=frame,
+                        zone_id=zone_id,
+                    )
                     seen_vids.add(vid)
                     
                     # Get display staff flag dynamically

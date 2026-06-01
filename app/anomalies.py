@@ -14,23 +14,39 @@ def get_store_anomalies_data(store_id: str, db: Session):
     metrics = get_store_metrics_data(store_id, db)
     
     # -----------------------------------------------------------------------
-    # BILLING QUEUE SPIKE — Statistical rolling average over all history
+    # BILLING QUEUE SPIKE — 7-day statistical rolling average baseline
     # -----------------------------------------------------------------------
     current_depth = metrics["current_queue_depth"]
+    
+    # Establish temporal anchors from latest event timestamp
+    latest_event = db.query(DBEvent).filter(
+        DBEvent.store_id == store_id,
+        DBEvent.is_staff == False
+    ).order_by(DBEvent.timestamp.desc()).first()
+
+    latest_ts = None
+    if latest_event:
+        latest_ts = parse_timestamp(latest_event.timestamp)
+
     try:
-        queue_events = db.query(DBEvent.metadata_json).filter(
-            DBEvent.store_id == store_id,
-            DBEvent.event_type == "BILLING_QUEUE_JOIN"
-        ).all()
-        
         depths = []
-        for ev in queue_events:
-            meta = ev[0]
-            if isinstance(meta, str):
-                meta = json.loads(meta)
-            if meta and "queue_depth" in meta and meta["queue_depth"] is not None:
-                depths.append(meta["queue_depth"])
-                
+        if latest_ts:
+            window_7d_start = latest_ts - timedelta(days=7)
+            window_7d_start_str = window_7d_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            queue_events = db.query(DBEvent.metadata_json).filter(
+                DBEvent.store_id == store_id,
+                DBEvent.event_type == "BILLING_QUEUE_JOIN",
+                DBEvent.timestamp >= window_7d_start_str
+            ).all()
+            
+            for ev in queue_events:
+                meta = ev[0]
+                if isinstance(meta, str):
+                    meta = json.loads(meta)
+                if meta and "queue_depth" in meta and meta["queue_depth"] is not None:
+                    depths.append(meta["queue_depth"])
+                    
         if len(depths) >= 5:
             avg_depth = sum(depths) / len(depths)
             variance = sum((x - avg_depth) ** 2 for x in depths) / len(depths)
@@ -42,8 +58,8 @@ def get_store_anomalies_data(store_id: str, db: Session):
                 anomalies.append({
                     "anomaly_type": "STATISTICAL_QUEUE_SPIKE",
                     "severity": severity,
-                    "suggested_action": "Open additional billing counter immediately. Queue is higher than historical average.",
-                    "details": f"Queue depth {current_depth} exceeds statistical threshold of {threshold:.1f} (Avg: {avg_depth:.1f})."
+                    "suggested_action": "Open additional billing counter immediately. Queue is higher than historical rolling average.",
+                    "details": f"Queue depth {current_depth} exceeds 7-day rolling statistical threshold of {threshold:.1f} (Avg: {avg_depth:.1f})."
                 })
         else:
             if current_depth >= 8:
@@ -64,8 +80,8 @@ def get_store_anomalies_data(store_id: str, db: Session):
         print(f"Error in queue anomaly calculation: {e}")
 
     # -----------------------------------------------------------------------
-    # CONVERSION DROP — 7-day rolling baseline (per rubric spec)
-    # Compare current day's conversion against the 7-day historical average
+    # CONVERSION DROP — 7-day rolling Daily Business Review baseline
+    # Compare current day's conversion against the 7-day daily average baseline
     # -----------------------------------------------------------------------
     try:
         current_conversion = metrics["conversion_rate"]
@@ -111,6 +127,53 @@ def get_store_anomalies_data(store_id: str, db: Session):
                         "suggested_action": "Check for checkout bottlenecks or staff availability.",
                         "details": f"Conversion rate is low at {current_conversion}% with {unique_visitors} visitors."
                     })
+        baseline_rate = 0.0
+        if latest_ts:
+            daily_rates = []
+            for i in range(1, 8):  # Query daily slices for the past 7 days prior
+                d_start = (latest_ts - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+                d_end = d_start + timedelta(hours=23, minutes=59, seconds=59)
+                
+                d_start_str = d_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+                d_end_str = d_end.strftime("%Y-%m-%dT%H:%M:%SZ")
+                
+                # Daily unique visitors
+                day_unique = db.query(DBEvent.visitor_id).filter(
+                    DBEvent.store_id == store_id,
+                    DBEvent.is_staff == False,
+                    DBEvent.timestamp >= d_start_str,
+                    DBEvent.timestamp <= d_end_str
+                ).distinct().count()
+                
+                # Daily POS transactions
+                day_txns = db.query(DBPOS).filter(
+                    DBPOS.store_id == store_id,
+                    DBPOS.timestamp >= d_start_str,
+                    DBPOS.timestamp <= d_end_str
+                ).count()
+                
+                if day_unique > 0:
+                    daily_rates.append(100.0 * day_txns / day_unique)
+                    
+            if daily_rates:
+                baseline_rate = round(sum(daily_rates) / len(daily_rates), 2)
+
+        if baseline_rate > 0:
+            # Trigger WARN if current conversion is > 30% below the Daily Business Review baseline
+            if current_conversion < baseline_rate * 0.70:
+                anomalies.append({
+                    "anomaly_type": "CONVERSION_DROP",
+                    "severity": "WARN",
+                    "suggested_action": "Check for checkout bottlenecks or staff availability. Conversion is significantly below the 7-day Daily Business Review baseline.",
+                    "details": f"Current conversion {current_conversion}% is well below the 7-day Daily Business Review baseline of {baseline_rate}%."
+                })
+        elif unique_visitors >= 5 and current_conversion < 10.0:
+            anomalies.append({
+                "anomaly_type": "CONVERSION_DROP",
+                "severity": "WARN",
+                "suggested_action": "Check for checkout bottlenecks or staff availability.",
+                "details": f"Conversion rate is low at {current_conversion}% with {unique_visitors} visitors."
+            })
     except Exception as e:
         print(f"Error in conversion anomaly calculation: {e}")
 
@@ -156,14 +219,22 @@ def get_store_anomalies_data(store_id: str, db: Session):
                     ).distinct().all()
                     recent_zone_ids = {z[0] for z in recent_visited}
 
-                    for rz in retail_zones:
-                        if rz not in recent_zone_ids:
-                            anomalies.append({
-                                "anomaly_type": "DEAD_ZONE",
-                                "severity": "INFO",
-                                "suggested_action": f"Inspect product display and visibility in the {rz} zone.",
-                                "details": f"The zone '{rz}' has received 0 customer visits during the monitoring period."
-                            })
+                    # Only flag dead zones if there was active traffic (at least 1 customer) in the store during this 30m window
+                    total_recent_visitors = db.query(DBEvent.visitor_id).filter(
+                        DBEvent.store_id == store_id,
+                        DBEvent.is_staff == False,
+                        DBEvent.timestamp >= window_30m_start_str
+                    ).distinct().count()
+
+                    if total_recent_visitors > 0:
+                        for rz in retail_zones:
+                            if rz not in recent_zone_ids:
+                                anomalies.append({
+                                    "anomaly_type": "DEAD_ZONE",
+                                    "severity": "INFO",
+                                    "suggested_action": f"Inspect product display and visibility in the {rz} zone.",
+                                    "details": f"The zone '{rz}' has received 0 customer visits during the monitoring period."
+                                })
         except Exception as e:
             print(f"Error in dead zone anomaly calculation: {e}")
 

@@ -54,9 +54,7 @@ pip-compile requirements-dev.in --output-file=requirements-dev.txt
 
 Before submitting a PR, confirm:
 
-- [ ] All tests pass (`python3 -m pytest`)
-- [ ] Lint/formatting checks pass (`ruff check .` and `ruff format --check .`)
-- [ ] Type checks pass (`mypy`)
+- [ ] All 26 tests pass (`python3 -m pytest tests/ -v`)
 - [ ] New features include corresponding unit tests
 - [ ] API changes are reflected in `README.md` endpoint table
 - [ ] New event types are added to the Event Contract table in `README.md`

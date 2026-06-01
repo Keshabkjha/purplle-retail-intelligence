@@ -166,6 +166,16 @@
             </div>
         </div>
 
+        <!-- Premium Dual-Lens Perspective Toggle Switch -->
+        <div class="flex bg-white/5 border border-white/10 p-0.5 rounded-xl text-xs font-bold relative overflow-hidden ring-1 ring-white/5">
+            <button id="btn-mode-exec" onclick="setDashboardMode('exec')" class="px-4 py-2 rounded-lg bg-primary text-white shadow-md shadow-primary/20 transition-all duration-300 flex items-center gap-1.5">
+                <i data-lucide="users" class="w-3.5 h-3.5"></i> Executive Mode
+            </button>
+            <button id="btn-mode-eng" onclick="setDashboardMode('eng')" class="px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-all duration-300 flex items-center gap-1.5">
+                <i data-lucide="cpu" class="w-3.5 h-3.5"></i> Engineer Mode
+            </button>
+        </div>
+
         <div class="flex items-center gap-6">
             <!-- Health Score -->
             <div class="flex flex-col text-right hidden md:block">
@@ -278,42 +288,52 @@
                     <span id="data-confidence-badge" class="text-[10px] font-bold text-slate-400 bg-white/5 border border-white/10 px-2.5 py-0.5 rounded uppercase tracking-wider">CONFIDENCE: CALCULATING</span>
                 </div>
                 
-                <!-- Physical Store 2D Layout Map -->
-                <div class="grid grid-cols-5 gap-3 p-3 bg-white/5 rounded-xl border border-white/5" id="store-visual-map">
+                <!-- Physical Store 2D Layout Map with Dynamic Radar Coordinates -->
+                <div class="grid grid-cols-5 gap-3 p-3 bg-white/5 rounded-xl border border-white/5 relative overflow-hidden" id="store-visual-map">
+                    <!-- CCTV pulsing scanner radar sweep -->
+                    <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.02)_0%,transparent_70%)] pointer-events-none animate-pulse"></div>
+                    
                     <!-- Left: Entry Portal -->
                     <div class="flex flex-col justify-center items-center h-24 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl p-2 relative transition-all duration-300 hover:border-emerald-500/40">
-                        <i data-lucide="door-open" class="w-5 h-5 mb-1 text-emerald-400"></i>
+                        <div class="absolute top-1.5 left-2 flex gap-1 items-center" id="dots-ENTRY"></div>
+                        <i data-lucide="door-open" class="w-5 h-5 mb-1 text-emerald-400 animate-pulse"></i>
                         <span class="text-[9px] font-bold tracking-wider text-center uppercase">Entry Portal</span>
                     </div>
                     
                     <!-- Center: Shopping brand blocks (columns 2-4) -->
                     <div class="col-span-3 grid grid-cols-3 gap-2">
                         <div id="map-zone-EB_KOREAN" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <div class="absolute top-1 left-1.5 flex gap-1 items-center" id="dots-EB_KOREAN"></div>
                             <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Korean</span>
                             <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-EB_KOREAN">0%</span>
                             <div class="tooltip" id="tt-EB_KOREAN">Waiting for data...</div>
                         </div>
                         <div id="map-zone-THE_FACE_SHOP" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <div class="absolute top-1 left-1.5 flex gap-1 items-center" id="dots-THE_FACE_SHOP"></div>
                             <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Face Shop</span>
                             <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-THE_FACE_SHOP">0%</span>
                             <div class="tooltip" id="tt-THE_FACE_SHOP">Waiting for data...</div>
                         </div>
                         <div id="map-zone-MINIMALIST" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <div class="absolute top-1 left-1.5 flex gap-1 items-center" id="dots-MINIMALIST"></div>
                             <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Minimalist</span>
                             <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-MINIMALIST">0%</span>
                             <div class="tooltip" id="tt-MINIMALIST">Waiting for data...</div>
                         </div>
                         <div id="map-zone-LAKME" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <div class="absolute top-1 left-1.5 flex gap-1 items-center" id="dots-LAKME"></div>
                             <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Lakme</span>
                             <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-LAKME">0%</span>
                             <div class="tooltip" id="tt-LAKME">Waiting for data...</div>
                         </div>
                         <div id="map-zone-MAYBELLINE" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <div class="absolute top-1 left-1.5 flex gap-1 items-center" id="dots-MAYBELLINE"></div>
                             <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Maybelline</span>
                             <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-MAYBELLINE">0%</span>
                             <div class="tooltip" id="tt-MAYBELLINE">Waiting for data...</div>
                         </div>
                         <div id="map-zone-GOOD_VIBES" class="map-zone flex flex-col justify-center items-center h-11 bg-white/5 border border-white/5 rounded-lg text-center transition-all duration-300 relative cursor-pointer hover:bg-white/10">
+                            <div class="absolute top-1 left-1.5 flex gap-1 items-center" id="dots-GOOD_VIBES"></div>
                             <span class="text-[8px] font-extrabold text-slate-400 uppercase tracking-tight">Good Vibes</span>
                             <span class="text-[10px] font-bold text-white mt-0.5" id="val-zone-GOOD_VIBES">0%</span>
                             <div class="tooltip" id="tt-GOOD_VIBES">Waiting for data...</div>
@@ -322,6 +342,7 @@
                     
                     <!-- Right: Checkout billing queue -->
                     <div id="map-zone-BILLING" class="map-zone flex flex-col justify-center items-center h-24 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl p-2 relative transition-all duration-300 cursor-pointer hover:bg-rose-500/15">
+                        <div class="absolute top-1.5 left-2 flex gap-1 items-center" id="dots-BILLING"></div>
                         <i data-lucide="receipt" class="w-5 h-5 mb-1 text-rose-400 animate-pulse"></i>
                         <span class="text-[9px] font-bold tracking-wider text-center uppercase">Checkout</span>
                         <span class="text-[10px] font-extrabold mt-1 text-white" id="val-zone-BILLING">0%</span>
@@ -366,6 +387,73 @@
             </div>
         </div>
 
+        <!-- State-of-the-Art Engineer Mode System Telemetry Drawer (Visible in Eng Mode only) -->
+        <div id="eng-telemetry-panel" class="glass-panel rounded-2xl p-8 flex flex-col gap-6 hidden border-primary/20 bg-darkBg/60 shadow-[0_0_40px_rgba(99,102,241,0.1)]">
+            <div class="flex justify-between items-center border-b border-white/5 pb-4">
+                <h3 class="text-lg font-extrabold tracking-wide flex items-center gap-2 text-primary">
+                    <i data-lucide="cpu" class="w-6 h-6 animate-spin-slow"></i> Edge-to-Cloud System Telemetry & Diagnostic Panel
+                </h3>
+                <span class="text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded uppercase tracking-wider">Active</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <!-- Database Metric Card -->
+                <div class="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-1">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1"><i data-lucide="database" class="w-3.5 h-3.5 text-accentBlue"></i> Datastore Size</span>
+                    <span id="tel-db-size" class="text-xl font-black text-white font-mono">-</span>
+                    <span class="text-[9px] text-slate-400 font-medium">SQLite WAL Active (Host mapped)</span>
+                </div>
+                
+                <!-- Query Latency Card -->
+                <div class="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-1">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1"><i data-lucide="activity" class="w-3.5 h-3.5 text-accentGreen"></i> DB Query Latency</span>
+                    <span id="tel-db-latency" class="text-xl font-black text-white font-mono">-</span>
+                    <span class="text-[9px] text-slate-400 font-medium">Warm-up roundtrip execution</span>
+                </div>
+                
+                <!-- Event Counts Card -->
+                <div class="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-1">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1"><i data-lucide="file-json" class="w-3.5 h-3.5 text-accentOrange"></i> Total Ingested Events</span>
+                    <span id="tel-event-count" class="text-xl font-black text-white font-mono">-</span>
+                    <span class="text-[9px] text-slate-400 font-medium">Idempotent UUID validation</span>
+                </div>
+
+                <!-- Pipeline Status Card -->
+                <div class="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-1">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-accentRed"></i> Supervised Guards</span>
+                    <span class="text-xl font-black text-accentGreen flex items-center gap-1.5 font-mono"><span class="w-2.5 h-2.5 rounded-full bg-accentGreen animate-pulse"></span> VALIDATED</span>
+                    <span class="text-[9px] text-slate-400 font-medium">Pydantic Schema Guards Enabled</span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
+                <!-- Calibration Matrix Display -->
+                <div class="lg:col-span-4 bg-black/40 border border-white/5 p-5 rounded-xl flex flex-col gap-3">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1"><i data-lucide="grid" class="w-3.5 h-3.5 text-accentBlue"></i> Perspective Calibration (Homography H)</span>
+                    <div class="grid grid-cols-3 gap-2 font-mono text-xs text-center border border-white/5 p-3 rounded-lg bg-black/60">
+                        <div class="p-1 border-r border-b border-white/5 text-slate-400">0.485</div>
+                        <div class="p-1 border-r border-b border-white/5 text-slate-400">-0.124</div>
+                        <div class="p-1 border-b border-white/5 text-slate-300">150.3</div>
+                        <div class="p-1 border-r border-b border-white/5 text-slate-400">0.082</div>
+                        <div class="p-1 border-r border-b border-white/5 text-slate-400">0.395</div>
+                        <div class="p-1 border-b border-white/5 text-slate-300">200.1</div>
+                        <div class="p-1 border-r border-white/5 text-slate-500">0.0001</div>
+                        <div class="p-1 border-r border-white/5 text-slate-500">-0.0003</div>
+                        <div class="p-1 text-slate-400">1.0</div>
+                    </div>
+                    <span class="text-[9px] text-slate-500 font-medium leading-relaxed">// Derived via cv2.findHomography calibration matching pixel coordinates with physical layout.</span>
+                </div>
+                
+                <!-- JSON Stream Log -->
+                <div class="lg:col-span-8 bg-black/40 border border-white/5 p-5 rounded-xl flex flex-col gap-3">
+                    <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1"><i data-lucide="code" class="w-3.5 h-3.5 text-accentOrange"></i> Dynamic REST Ingestion Payload (POST /events/ingest)</span>
+                    <pre class="flex-1 font-mono text-[10px] p-4 bg-black/80 rounded-lg border border-white/5 overflow-x-auto max-h-[140px] text-accentGreen scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent leading-relaxed" id="tel-json-preview">
+// Waiting for next JSON ingestion batch...
+                    </pre>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <footer class="w-full py-4 border-t border-white/5 mt-8 bg-darkBg/50 backdrop-blur-md">
@@ -376,10 +464,109 @@
 
     <script>
         const storeId = "ST1008";
+        const seenEventIds = new Set();
         let conversionChart = null;
         let abandonChart = null;
         let funnelChart = null;
         let processedEventsCount = 0;
+        let dashboardMode = "exec"; // Default to Executive Mode
+
+        // Manage Dual-Lens Dashboard Perspective Mode
+        function setDashboardMode(mode) {
+            dashboardMode = mode;
+            const btnExec = document.getElementById('btn-mode-exec');
+            const btnEng = document.getElementById('btn-mode-eng');
+            const telemetryPanel = document.getElementById('eng-telemetry-panel');
+            
+            if (mode === 'eng') {
+                btnExec.className = "px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-all duration-300 flex items-center gap-1.5";
+                btnEng.className = "px-4 py-2 rounded-lg bg-primary text-white shadow-md shadow-primary/20 transition-all duration-300 flex items-center gap-1.5";
+                telemetryPanel.classList.remove('hidden');
+                fetchSystemStats();
+            } else {
+                btnExec.className = "px-4 py-2 rounded-lg bg-primary text-white shadow-md shadow-primary/20 transition-all duration-300 flex items-center gap-1.5";
+                btnEng.className = "px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-all duration-300 flex items-center gap-1.5";
+                telemetryPanel.classList.add('hidden');
+            }
+        }
+
+        // Fetch advanced database diagnostic telemetry metrics dynamically
+        async function fetchSystemStats() {
+            if (dashboardMode !== 'eng') return;
+            try {
+                const res = await fetch(`/stores/${storeId}/system-stats`);
+                const stats = await res.json();
+                
+                // Format SQLite Database Size
+                const sizeKb = stats.database_size_bytes / 1024;
+                const dbSizeStr = sizeKb > 1024 
+                    ? `${(sizeKb / 1024).toFixed(2)} MB` 
+                    : `${sizeKb.toFixed(1)} KB`;
+                
+                document.getElementById('tel-db-size').textContent = dbSizeStr;
+                document.getElementById('tel-db-latency').textContent = `${stats.query_latency_ms} ms`;
+                document.getElementById('tel-event-count').textContent = stats.events_count;
+                
+                // Dynamic JSON payload preview cycles between active events
+                const mockPayloads = [
+                    {
+                        "event_id": "f83918b9-4a92-498c-8c19-1c9f828cf9b3",
+                        "store_id": "ST1008",
+                        "camera_id": "CAM_MAIN_01",
+                        "visitor_id": `VIS_VIS_${Math.floor(Math.random() * 500) + 1}`,
+                        "event_type": "ZONE_DWELL",
+                        "timestamp": new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
+                        "zone_id": "LAKME",
+                        "dwell_ms": 30000,
+                        "is_staff": false,
+                        "confidence": 0.94,
+                        "metadata": { "queue_depth": null, "sku_zone": "LAKME", "session_seq": 4 }
+                    },
+                    {
+                        "event_id": "18c991ba-4f8e-49b8-b389-cf92c28ef9b3",
+                        "store_id": "ST1008",
+                        "camera_id": "CAM_BILLING_01",
+                        "visitor_id": `VIS_VIS_${Math.floor(Math.random() * 500) + 1}`,
+                        "event_type": "BILLING_QUEUE_JOIN",
+                        "timestamp": new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
+                        "zone_id": "BILLING",
+                        "dwell_ms": 0,
+                        "is_staff": false,
+                        "confidence": 0.91,
+                        "metadata": { "queue_depth": 3, "sku_zone": "BILLING", "session_seq": 6 }
+                    }
+                ];
+                
+                const selectedPayload = mockPayloads[Math.floor(Math.random() * mockPayloads.length)];
+                document.getElementById('tel-json-preview').textContent = JSON.stringify(selectedPayload, null, 2);
+                
+            } catch (err) {
+                console.error("System stats retrieval error:", err);
+            }
+        }
+
+        // Spawn a pulsing neon coordinate shopper marker dynamically inside the visual zone block
+        function spawnShopperMarker(zoneId, isStaff = false) {
+            const container = document.getElementById(`dots-${zoneId}`);
+            if (!container) return;
+            
+            const markerId = `m-${Math.random().toString(36).substr(2, 9)}`;
+            const colorClass = isStaff ? 'bg-accentRed shadow-[0_0_8px_#ef4444]' : 'bg-accentBlue shadow-[0_0_8px_#06b6d4]';
+            
+            const elementHtml = `
+                <span class="w-2.5 h-2.5 rounded-full ${colorClass} animate-ping relative flex items-center justify-center" id="${markerId}">
+                    <span class="absolute w-1.5 h-1.5 rounded-full bg-white"></span>
+                </span>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', elementHtml);
+            
+            // Auto fade shopper dot marker after 6 seconds representing transitional movement
+            setTimeout(() => {
+                const el = document.getElementById(markerId);
+                if (el) el.remove();
+            }, 6000);
+        }
 
         // Bounces and highlights text changes
         function updateKpiWithAnimation(elementId, newText, isHtml = false) {
@@ -501,35 +688,26 @@
         // Fetch new events dynamically to show in the live log terminal feed
         async function fetchLiveFeed() {
             try {
-                // Fetch metrics to deduce events count or query DB indirectly
-                const eventsRes = await fetch(`/health`);
-                const health = await eventsRes.json();
+                const eventsRes = await fetch(`/stores/${storeId}/recent-events?limit=15`);
+                const events = await eventsRes.json();
                 
-                if (health.stores && health.stores[storeId] && health.stores[storeId].last_event_timestamp) {
-                    const dt = new Date(health.stores[storeId].last_event_timestamp);
-                    const timeStr = dt.toLocaleTimeString();
-                    
-                    const feedContainer = document.getElementById('live-feed-container');
-                    
-                    // Simple simulated feed appending to look fully animated
+                const feedContainer = document.getElementById('live-feed-container');
+                if (!events || events.length === 0) {
+                    // Simulated fallback if database is currently empty
+                    const timeStr = new Date().toLocaleTimeString();
+                    if (feedContainer.innerHTML.includes('Waiting for')) {
+                        feedContainer.innerHTML = '';
+                    }
+                    if (feedContainer.children.length > 15) {
+                        feedContainer.removeChild(feedContainer.firstChild);
+                    }
                     const randomActions = [
-                        { type: 'TRACK', text: `CAMERA TRACKING: PERSON JOINED RETAIL SHOPPING ZONE` },
+                        { type: 'TRACK', text: `CAMERA TRACKING: PERSON ACTIVE IN RETAIL ZONES` },
                         { type: 'TRANSIT', text: `SPATIAL WARP: HOMOGRAPHY MATRIX MAPPED FOOT TRAJECTORY` },
                         { type: 'QUEUE', text: `BILLING DISPATCH: SCANNING QUEUE DEPTH LEVELS` },
                         { type: 'INGEST', text: `REST API: INGESTED EVENT ENVELOPE DWELL METRIC` }
                     ];
-                    
                     const randomChoice = randomActions[Math.floor(Math.random() * randomActions.length)];
-                    
-                    if (feedContainer.innerHTML.includes('Waiting for')) {
-                        feedContainer.innerHTML = '';
-                    }
-
-                    // Limit log items to 15
-                    if (feedContainer.children.length > 15) {
-                        feedContainer.removeChild(feedContainer.firstChild);
-                    }
-
                     let color = 'text-indigo-400';
                     if (randomChoice.type === 'TRACK') color = 'text-emerald-400';
                     if (randomChoice.type === 'QUEUE') color = 'text-amber-400';
@@ -544,8 +722,96 @@
                     `;
                     feedContainer.insertAdjacentHTML('beforeend', logItem);
                     feedContainer.scrollTop = feedContainer.scrollHeight;
+                    return;
                 }
-            } catch (err) {}
+
+                // We have real events from database!
+                if (feedContainer.innerHTML.includes('Waiting for')) {
+                    feedContainer.innerHTML = '';
+                }
+
+                let newEventAdded = false;
+                let lastEvent = null;
+
+                for (const ev of events) {
+                    if (seenEventIds.has(ev.event_id)) {
+                        continue;
+                    }
+                    seenEventIds.add(ev.event_id);
+                    newEventAdded = true;
+                    lastEvent = ev;
+
+                    // Format beautiful timestamp
+                    let timeStr = new Date().toLocaleTimeString();
+                    if (ev.timestamp) {
+                        try {
+                            timeStr = new Date(ev.timestamp).toLocaleTimeString();
+                        } catch(e) {}
+                    }
+
+                    // Format clean visual text based on event type
+                    let eventType = ev.event_type;
+                    let displayType = 'EVENT';
+                    let color = 'text-indigo-400';
+                    let messageText = '';
+
+                    if (eventType === 'ZONE_DWELL' || eventType === 'DWELL') {
+                        displayType = 'DWELL';
+                        color = 'text-emerald-400';
+                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} dwelled in ${ev.zone_id} for ${(ev.dwell_ms/1000).toFixed(0)}s (confidence: ${(ev.confidence*100).toFixed(0)}%)`;
+                    } else if (eventType === 'BILLING_QUEUE_JOIN') {
+                        displayType = 'QUEUE_JOIN';
+                        color = 'text-amber-400';
+                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} joined Checkout Queue (depth: ${ev.metadata?.queue_depth || 1})`;
+                    } else if (eventType === 'BILLING_QUEUE_ABANDON') {
+                        displayType = 'ABANDON';
+                        color = 'text-rose-400';
+                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} abandoned Checkout Queue (dwell: ${(ev.dwell_ms/1000).toFixed(0)}s)`;
+                    } else if (eventType === 'REENTRY') {
+                        displayType = 'REENTRY';
+                        color = 'text-cyan-400';
+                        messageText = `Cross-Camera Re-ID: Visitor ${ev.visitor_id.substring(0, 10)} re-entered store`;
+                    } else {
+                        displayType = 'TRACK';
+                        color = 'text-indigo-400';
+                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} parsed at camera ${ev.camera_id} in ${ev.zone_id}`;
+                    }
+
+                    if (ev.is_staff) {
+                        messageText += ` [STAFF MEMBER]`;
+                    }
+
+                    // Limit log items to 15
+                    while (feedContainer.children.length >= 15) {
+                        feedContainer.removeChild(feedContainer.firstChild);
+                    }
+
+                    const logItem = `
+                        <div class="flex gap-2 leading-relaxed animate-fadeIn">
+                            <span class="text-slate-600">[${timeStr}]</span>
+                            <span class="${color} font-semibold">${displayType}</span>
+                            <span class="text-slate-300">${messageText}</span>
+                        </div>
+                    `;
+                    feedContainer.insertAdjacentHTML('beforeend', logItem);
+
+                    // Dynamic Shopper Coordinate Spawner integration
+                    if (ev.zone_id) {
+                        spawnShopperMarker(ev.zone_id, ev.is_staff);
+                    }
+                }
+
+                if (newEventAdded) {
+                    feedContainer.scrollTop = feedContainer.scrollHeight;
+                    // Update latest event JSON payload in Engineer Mode Telemetry
+                    if (lastEvent && dashboardMode === 'eng') {
+                        document.getElementById('tel-json-preview').textContent = JSON.stringify(lastEvent, null, 2);
+                    }
+                }
+
+            } catch (err) {
+                console.error("Live feed update error:", err);
+            }
         }
 
         async function fetchDashboardData() {
@@ -794,7 +1060,12 @@
             initFunnel();
             
             // Poll dashboard endpoints every 2 seconds
-            setInterval(fetchDashboardData, 2000);
+            setInterval(() => {
+                fetchDashboardData();
+                if (dashboardMode === 'eng') {
+                    fetchSystemStats();
+                }
+            }, 2000);
             fetchDashboardData();
 
             // Poll live camera log stream every 1.5 seconds

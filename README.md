@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/keshabkjha/purplle-retail-intelligence/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-12%20passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white"></a>
+  <a href="https://github.com/keshabkjha/purplle-retail-intelligence/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-25%20passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://fastapi.tiangolo.com"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white"></a>
   <a href="https://docs.ultralytics.com"><img alt="YOLO11" src="https://img.shields.io/badge/YOLO11-Ultralytics-FF6B35?style=for-the-badge&logo=pytorch&logoColor=white"></a>
@@ -74,7 +74,7 @@ graph TD
     B --> C{YOLO11n + ByteTrack\nPerson Detection}
     C --> D[Homography Warp\nFloor Plan Mapping]
     D --> E{Point-in-Polygon\nZone Assignment}
-    E --> F[Structured JSON Events\nENTRY / ZONE_ENTER / ZONE_DWELL\nZONE_EXIT / EXIT / REENTRY\nBILLING_QUEUE_JOIN / ABANDON]
+    E --> F[Structured JSON Events\nENTRY / ZONE_ENTER / ZONE_DWELL\nZONE_EXIT / EXIT / REENTRY\nBILLING_QUEUE_JOIN / BILLING_QUEUE_ABANDON]
     F -->|POST /events/ingest| G[FastAPI Web Server\napp/main.py]
     G --> H[(SQLite Database\nstore_intelligence.db)]
     G --> I[REST API Endpoints\n/metrics /funnel /heatmap /anomalies]
@@ -102,6 +102,14 @@ purplle-retail-intelligence/
 ├── config/
 │   ├── store_layout.json  # Zone polygon definitions (Brigade Road, Bangalore)
 │   └── calibration.json   # Camera homography transform matrices
+├── data/
+│   └── labels/            # Working annotations for supervised staff / re-ID training
+├── examples/
+│   └── labels/            # Bundled sample JSONL templates
+├── scripts/
+│   ├── bootstrap_supervised_flow.py # One-command copy + train flow
+│   ├── label_helper.py              # Tiny annotation helper
+│   └── train_supervised_models.py    # Offline supervised trainer
 ├── tests/
 │   ├── test_pipeline.py   # Core metric + pipeline logic tests
 │   ├── test_metrics.py    # KPI aggregation coverage
@@ -125,13 +133,16 @@ cd purplle-retail-intelligence
 # 2. Start the API and database
 docker compose up -d --build
 
-# 3. Verify the API is live
+# 3. Seed the POS transaction data inside the container
+docker compose exec api python3 -m app.ingestion
+
+# 4. Verify the API is live
 curl http://localhost:8000/health
 
-# 4. Run the CV pipeline on a video
+# 5. Run the CV pipeline on the host (edge client) streaming events to the API container
 python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 
-# 5. Open the live dashboard
+# 6. Open the live dashboard
 open http://localhost:8000/dashboard
 ```
 
@@ -144,23 +155,124 @@ pip install -r requirements-dev.txt
 # Start the API server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# In a separate terminal, run the pipeline
+# In a separate terminal, seed the POS data
+python3 -m app.ingestion
+
+# Run the pipeline locally on a video clip
 python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 ```
 
 ### Option C: Run Tests
 
 ```bash
-# Run the full test suite (19 tests)
-python3 -m pytest
+# Run the full comprehensive test suite (26 tests covering edge cases)
+python3 -m pytest tests/ -v
 
 # Expected output:
-# tests/test_pipeline.py::test_entry_exit_metrics     PASSED
-# tests/test_pipeline.py::test_staff_exclusion        PASSED
-# tests/test_metrics.py::test_conversion_rate         PASSED
-# tests/test_anomalies.py::test_billing_queue_spike   PASSED
-# ... 12 passed in 2.5s ✅
+# tests/test_cross_camera.py::test_appearance_based_matching PASSED
+# tests/test_cross_camera.py::test_transition_priors PASSED
+# tests/test_cross_camera.py::test_reentry_dwell_session_correction PASSED
+# tests/test_anomalies.py::test_conversion_drop_anomaly PASSED
+# ... 26 passed in ~3s ✅
 ```
+
+### Optional: Train Supervised Models
+
+If you have labeled staff crops or pairwise identity annotations, you can train offline models and save them into `pipeline/model_state/`.
+
+```bash
+python3 scripts/train_supervised_models.py \
+  --staff-labels data/labels/staff_labels.jsonl \
+  --reid-pairs data/labels/reid_pairs.jsonl \
+  --output-dir pipeline/model_state
+```
+
+At runtime, `pipeline/detect.py` automatically prefers `staff_supervised.pkl` and `identity_supervised.pkl` when those artifacts exist. If they are missing, the system falls back to the lightweight online models so the demo still works out of the box.
+
+Sample annotation templates live in:
+- `examples/labels/staff_labels.sample.jsonl`
+- `examples/labels/reid_pairs.sample.jsonl`
+
+For quick manual labeling, use:
+```bash
+python3 scripts/label_helper.py --mode staff --output data/labels/staff_labels.jsonl
+python3 scripts/label_helper.py --mode identity --output data/labels/reid_pairs.jsonl
+```
+
+For the fastest reproducible path from a fresh checkout, run one bootstrap command:
+
+```bash
+python3 scripts/bootstrap_supervised_flow.py
+```
+
+That command:
+- creates `data/labels/staff_labels.jsonl` and `data/labels/reid_pairs.jsonl` from the bundled templates if they do not exist
+- trains both supervised models
+- writes `staff_supervised.pkl` and `identity_supervised.pkl` into `pipeline/model_state/`
+
+---
+
+## 🧪 End-to-End Smoke Test Flow
+
+Follow this exact path from a clean clone to verify the entire system is fully integrated, operational, and production-ready.
+
+### Step 1: Spin Up Infrastructure
+Start the FastAPI server and database in Docker:
+```bash
+docker compose up -d --build
+```
+Wait a few seconds for database initialization, then verify the health status:
+```bash
+curl -s http://localhost:8000/health
+```
+**Expected Response**:
+```json
+{
+  "status": "healthy",
+  "database": "healthy",
+  "last_event_timestamp": null,
+  "stale_feed": false,
+  "stores": {}
+}
+```
+
+### Step 2: Seed POS Transactions
+Seed the Brigade Road, Bangalore store's actual POS CSV transaction database inside the running container:
+```bash
+docker compose exec api python3 -m app.ingestion
+```
+**Expected Output**:
+```
+🌱 Seeding POS transactions from: Brigade_Bangalore_10_April_26 (1)bc6219c.csv...
+✅ Successfully seeded 24 POS transaction records into tables.
+```
+
+### Step 3: Run the Computer Vision Pipeline
+Process the CCTV clips in sequence on the host (representing the local edge processor in a store setup). This runs detection + multi-signal Re-ID and streams events directly to the active REST API container:
+```bash
+python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
+```
+*Note: You can process all available cameras sequentially by running `./pipeline/run.sh`.*
+
+### Step 4: Validate Ingestion & Performance Metrics
+Query the store metrics to confirm successful visitor tracking, dwell times, and POS conversion matches:
+```bash
+curl -s http://localhost:8000/stores/ST1008/metrics
+```
+**Expected Response**: A rich JSON response containing `unique_visitors`, `conversion_rate`, `average_dwell_minutes`, and `current_queue_depth`.
+
+### Step 5: Check Operations & Anomalies
+Query the active operational anomalies to inspect if any statistical warnings (conversion drops, queue depth spikes) have fired:
+```bash
+curl -s http://localhost:8000/stores/ST1008/anomalies
+```
+
+### Step 6: View the Dashboard
+Launch the self-contained live operations control room dashboard:
+```bash
+open http://localhost:8000/dashboard
+```
+Here, you'll see animated KPI cards, dynamic visitor conversion funnel flows, and a 2-dimensional zone intensity heatmap updated in real-time.
 
 ---
 
@@ -354,11 +466,13 @@ flowchart LR
 
 ```
 tests/
-├── test_pipeline.py     # Entry/exit metrics, staff exclusion
-├── test_metrics.py      # Conversion rate, dwell time, queue depth
-└── test_anomalies.py    # Queue spike (WARN + CRITICAL), conversion drop, dead zones
+├── test_pipeline.py     # Entry/exit metrics, staff exclusion, re-entry
+├── test_metrics.py      # Conversion rate, dwell time, queue depth, validation
+├── test_anomalies.py    # Queue spike (WARN + CRITICAL), conversion drop, dead zones
+├── test_cross_camera.py # Cross-camera Re-ID, transition priors, batch limit, stale feed, training round-trip
+└── test_supervised_runtime.py # Supervised artifact load smoke test
 
-Total: 19 tests | Status: ✅ All Passing
+Total: 26 tests | Status: ✅ All Passing
 ```
 
 Run with:

@@ -1,6 +1,8 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: api.Dockerfile
     ports:
       - "8000:8000"
     volumes:
@@ -12,4 +14,5 @@ services:
       - RATE_LIMIT_PER_MINUTE=120
       - RATE_LIMIT_WINDOW_SECONDS=60
       - MAX_INGEST_BATCH=500
+      - PORT=8000
     restart: always
