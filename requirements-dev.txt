@@ -207,7 +207,7 @@ pyyaml==6.0.3
     # via
     #   pre-commit
     #   ultralytics
-requests==2.31.0
+requests==2.34.2
     # via
     #   -r requirements.in
     #   ultralytics

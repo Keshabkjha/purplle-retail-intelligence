@@ -156,7 +156,7 @@ pytz==2026.2
     # via pandas
 pyyaml==6.0.3
     # via ultralytics
-requests==2.31.0
+requests==2.34.2
     # via
     #   -r requirements.in
     #   ultralytics
