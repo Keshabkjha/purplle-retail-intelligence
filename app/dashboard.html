@@ -120,6 +120,21 @@
             border-color: rgba(239, 68, 68, 0.4) !important;
         }
 
+        /* New event glow flash */
+        @keyframes feedGlow {
+            0%   { background: rgba(16, 185, 129, 0.15); border-radius: 6px; }
+            100% { background: transparent; }
+        }
+        .feed-row-new {
+            animation: feedGlow 1.5s ease-out forwards;
+        }
+
+        /* Feed paused indicator */
+        #live-feed-container.paused {
+            border-color: rgba(251, 191, 36, 0.3);
+            box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.15);
+        }
+
         /* Tooltip styles */
         .map-zone { position: relative; }
         .map-zone .tooltip {
@@ -374,7 +389,7 @@
             </div>
 
             <!-- Right Panel: Operations & Live Control Feed (Col-span 3) -->
-            <div class="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col gap-6 relative overflow-hidden">
+            <div class="glass-panel rounded-2xl p-6 lg:col-span-3 flex flex-col gap-4 relative overflow-hidden">
                 <!-- CCTV screen overlay -->
                 <div class="scanner-line"></div>
                 <div class="flex justify-between items-center">
@@ -383,8 +398,17 @@
                     </h3>
                     <span class="text-[10px] font-bold text-accentRed bg-accentRed/10 border border-accentRed/20 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">Live</span>
                 </div>
+
+                <!-- Filter Chips -->
+                <div class="flex flex-wrap gap-2" id="feed-filter-chips">
+                    <button onclick="setFeedFilter('ALL')" data-filter="ALL" class="feed-chip active-chip px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all duration-200 border-white/20 text-slate-300 hover:border-white/40">All</button>
+                    <button onclick="setFeedFilter('ENTRY')" data-filter="ENTRY" class="feed-chip px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all duration-200 border-white/10 text-slate-500 hover:border-indigo-400/50 hover:text-indigo-300">Entry/Exit</button>
+                    <button onclick="setFeedFilter('DWELL')" data-filter="DWELL" class="feed-chip px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all duration-200 border-white/10 text-slate-500 hover:border-emerald-400/50 hover:text-emerald-300">Dwell</button>
+                    <button onclick="setFeedFilter('QUEUE')" data-filter="QUEUE" class="feed-chip px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all duration-200 border-white/10 text-slate-500 hover:border-amber-400/50 hover:text-amber-300">Queue</button>
+                    <button onclick="setFeedFilter('REENTRY')" data-filter="REENTRY" class="feed-chip px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all duration-200 border-white/10 text-slate-500 hover:border-cyan-400/50 hover:text-cyan-300">Re-Entry</button>
+                </div>
                 
-                <div class="flex-1 font-mono text-[11px] overflow-y-auto max-h-[330px] p-4 bg-[#05070c] rounded-xl border border-white/5 space-y-3 scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent" id="live-feed-container">
+                <div class="flex-1 font-mono text-[11px] overflow-y-auto max-h-[290px] p-4 bg-[#05070c] rounded-xl border border-white/5 space-y-3 scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent" id="live-feed-container">
                     <div class="text-slate-500">// Waiting for spatial camera events...</div>
                 </div>
             </div>
@@ -778,6 +802,103 @@
             funnelChart.render();
         }
 
+        // Live Feed State
+        let feedFilter = 'ALL';
+        let feedPaused = false;
+        
+        // Filter chip styles
+        const chipActiveClasses = {
+            'ALL':     'border-white/40 text-white bg-white/10',
+            'ENTRY':   'border-indigo-400/60 text-indigo-300 bg-indigo-400/10',
+            'DWELL':   'border-emerald-400/60 text-emerald-300 bg-emerald-400/10',
+            'QUEUE':   'border-amber-400/60 text-amber-300 bg-amber-400/10',
+            'REENTRY': 'border-cyan-400/60 text-cyan-300 bg-cyan-400/10',
+        };
+        
+        function setFeedFilter(filter) {
+            feedFilter = filter;
+            // Update chip appearance
+            document.querySelectorAll('.feed-chip').forEach(chip => {
+                const f = chip.dataset.filter;
+                chip.className = chip.className
+                    .replace(/border-\S+/g, 'border-white/10')
+                    .replace(/text-(?!\[)\S+/g, 'text-slate-500')
+                    .replace(/bg-\S+/g, '');
+                if (f === filter) {
+                    chip.classList.add(...chipActiveClasses[f].split(' '));
+                }
+            });
+            // Re-render visible events
+            renderFeedFromCache();
+        }
+
+        // Cache of all real events received so far
+        let allFeedEvents = [];
+
+        function renderFeedFromCache() {
+            const feedContainer = document.getElementById('live-feed-container');
+            feedContainer.innerHTML = '';
+            
+            const filtered = allFeedEvents.filter(ev => {
+                if (feedFilter === 'ALL') return true;
+                if (feedFilter === 'ENTRY') return ['ENTRY','EXIT','REENTRY'].includes(ev.event_type);
+                if (feedFilter === 'DWELL') return ['ZONE_DWELL','DWELL','ZONE_ENTER'].includes(ev.event_type);
+                if (feedFilter === 'QUEUE') return ['BILLING_QUEUE_JOIN','BILLING_QUEUE_ABANDON'].includes(ev.event_type);
+                if (feedFilter === 'REENTRY') return ev.event_type === 'REENTRY';
+                return true;
+            });
+            
+            if (filtered.length === 0) {
+                feedContainer.innerHTML = `<div class="text-slate-600">// No ${feedFilter} events yet...</div>`;
+                return;
+            }
+            
+            filtered.slice(-15).forEach(ev => {
+                feedContainer.insertAdjacentHTML('beforeend', buildEventRow(ev, false));
+            });
+            feedContainer.scrollTop = feedContainer.scrollHeight;
+        }
+
+        function buildEventRow(ev, isNew) {
+            let timeStr = new Date().toLocaleTimeString();
+            if (ev.timestamp) { try { timeStr = new Date(ev.timestamp).toLocaleTimeString(); } catch(e) {} }
+
+            let displayType = 'EVENT', color = 'text-indigo-400', messageText = '';
+            const eventType = ev.event_type;
+
+            if (eventType === 'ZONE_DWELL' || eventType === 'DWELL' || eventType === 'ZONE_ENTER') {
+                displayType = 'DWELL'; color = 'text-emerald-400';
+                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} in ${ev.zone_id} (${(ev.dwell_ms/1000).toFixed(0)}s)`;
+            } else if (eventType === 'BILLING_QUEUE_JOIN') {
+                displayType = 'QUEUE'; color = 'text-amber-400';
+                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} joined Checkout Queue (depth: ${ev.metadata?.queue_depth || 1})`;
+            } else if (eventType === 'BILLING_QUEUE_ABANDON') {
+                displayType = 'ABANDON'; color = 'text-rose-400';
+                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} abandoned Checkout Queue`;
+            } else if (eventType === 'REENTRY') {
+                displayType = 'REENTRY'; color = 'text-cyan-400';
+                messageText = `Cross-Camera Re-ID: Visitor ${ev.visitor_id?.substring(0,10)} re-entered`;
+            } else if (eventType === 'ENTRY') {
+                displayType = 'ENTRY'; color = 'text-indigo-400';
+                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} entered via ${ev.camera_id}`;
+            } else if (eventType === 'EXIT') {
+                displayType = 'EXIT'; color = 'text-slate-400';
+                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} exited (${ev.zone_id})`;
+            } else {
+                displayType = 'TRACK'; color = 'text-indigo-400';
+                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} at ${ev.camera_id} → ${ev.zone_id}`;
+            }
+            if (ev.is_staff) messageText += ` [STAFF]`;
+
+            const glowClass = isNew ? 'feed-row-new' : '';
+            return `
+                <div class="flex gap-2 leading-relaxed ${glowClass}" data-event-type="${eventType}">
+                    <span class="text-slate-600 shrink-0">[${timeStr}]</span>
+                    <span class="${color} font-semibold shrink-0">${displayType}</span>
+                    <span class="text-slate-300">${messageText}</span>
+                </div>`;
+        }
+
         // Fetch new events dynamically to show in the live log terminal feed
         async function fetchLiveFeed() {
             try {
@@ -814,7 +935,7 @@
                         </div>
                     `;
                     feedContainer.insertAdjacentHTML('beforeend', logItem);
-                    feedContainer.scrollTop = feedContainer.scrollHeight;
+                    if (!feedPaused) feedContainer.scrollTop = feedContainer.scrollHeight;
                     return;
                 }
 
@@ -827,76 +948,34 @@
                 let lastEvent = null;
 
                 for (const ev of events) {
-                    if (seenEventIds.has(ev.event_id)) {
-                        continue;
-                    }
+                    if (seenEventIds.has(ev.event_id)) continue;
                     seenEventIds.add(ev.event_id);
+                    allFeedEvents.push(ev);
                     newEventAdded = true;
                     lastEvent = ev;
 
-                    // Format beautiful timestamp
-                    let timeStr = new Date().toLocaleTimeString();
-                    if (ev.timestamp) {
-                        try {
-                            timeStr = new Date(ev.timestamp).toLocaleTimeString();
-                        } catch(e) {}
+                    // Check filter match before appending to DOM
+                    const matchesFilter = feedFilter === 'ALL'
+                        || (feedFilter === 'ENTRY' && ['ENTRY','EXIT','REENTRY'].includes(ev.event_type))
+                        || (feedFilter === 'DWELL' && ['ZONE_DWELL','DWELL','ZONE_ENTER'].includes(ev.event_type))
+                        || (feedFilter === 'QUEUE' && ['BILLING_QUEUE_JOIN','BILLING_QUEUE_ABANDON'].includes(ev.event_type))
+                        || (feedFilter === 'REENTRY' && ev.event_type === 'REENTRY');
+
+                    if (matchesFilter) {
+                        while (feedContainer.children.length >= 15) {
+                            feedContainer.removeChild(feedContainer.firstChild);
+                        }
+                        feedContainer.insertAdjacentHTML('beforeend', buildEventRow(ev, true));
+                        // Remove glow class after animation
+                        const newRow = feedContainer.lastElementChild;
+                        setTimeout(() => newRow?.classList.remove('feed-row-new'), 1500);
                     }
 
-                    // Format clean visual text based on event type
-                    let eventType = ev.event_type;
-                    let displayType = 'EVENT';
-                    let color = 'text-indigo-400';
-                    let messageText = '';
-
-                    if (eventType === 'ZONE_DWELL' || eventType === 'DWELL') {
-                        displayType = 'DWELL';
-                        color = 'text-emerald-400';
-                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} dwelled in ${ev.zone_id} for ${(ev.dwell_ms/1000).toFixed(0)}s (confidence: ${(ev.confidence*100).toFixed(0)}%)`;
-                    } else if (eventType === 'BILLING_QUEUE_JOIN') {
-                        displayType = 'QUEUE_JOIN';
-                        color = 'text-amber-400';
-                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} joined Checkout Queue (depth: ${ev.metadata?.queue_depth || 1})`;
-                    } else if (eventType === 'BILLING_QUEUE_ABANDON') {
-                        displayType = 'ABANDON';
-                        color = 'text-rose-400';
-                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} abandoned Checkout Queue (dwell: ${(ev.dwell_ms/1000).toFixed(0)}s)`;
-                    } else if (eventType === 'REENTRY') {
-                        displayType = 'REENTRY';
-                        color = 'text-cyan-400';
-                        messageText = `Cross-Camera Re-ID: Visitor ${ev.visitor_id.substring(0, 10)} re-entered store`;
-                    } else {
-                        displayType = 'TRACK';
-                        color = 'text-indigo-400';
-                        messageText = `Visitor ${ev.visitor_id.substring(0, 10)} parsed at camera ${ev.camera_id} in ${ev.zone_id}`;
-                    }
-
-                    if (ev.is_staff) {
-                        messageText += ` [STAFF MEMBER]`;
-                    }
-
-                    // Limit log items to 15
-                    while (feedContainer.children.length >= 15) {
-                        feedContainer.removeChild(feedContainer.firstChild);
-                    }
-
-                    const logItem = `
-                        <div class="flex gap-2 leading-relaxed animate-fadeIn">
-                            <span class="text-slate-600">[${timeStr}]</span>
-                            <span class="${color} font-semibold">${displayType}</span>
-                            <span class="text-slate-300">${messageText}</span>
-                        </div>
-                    `;
-                    feedContainer.insertAdjacentHTML('beforeend', logItem);
-
-                    // Dynamic Shopper Coordinate Spawner integration
-                    if (ev.zone_id) {
-                        spawnShopperMarker(ev.zone_id, ev.is_staff);
-                    }
+                    if (ev.zone_id) spawnShopperMarker(ev.zone_id, ev.is_staff);
                 }
 
-                if (newEventAdded) {
+                if (newEventAdded && !feedPaused) {
                     feedContainer.scrollTop = feedContainer.scrollHeight;
-                    // Update latest event JSON payload in Engineer Mode Telemetry
                     if (lastEvent && dashboardMode === 'eng') {
                         document.getElementById('tel-json-preview').textContent = JSON.stringify(lastEvent, null, 2);
                     }
@@ -1339,6 +1418,20 @@
             lucide.createIcons();
             initGauges();
             initFunnel();
+
+            // Hover-pause on Live Event Feed
+            const feedEl = document.getElementById('live-feed-container');
+            feedEl.addEventListener('mouseenter', () => {
+                feedPaused = true;
+                feedEl.classList.add('paused');
+                feedEl.title = 'Scroll paused — move mouse away to resume';
+            });
+            feedEl.addEventListener('mouseleave', () => {
+                feedPaused = false;
+                feedEl.classList.remove('paused');
+                feedEl.title = '';
+                feedEl.scrollTop = feedEl.scrollHeight;
+            });
             
             // Poll dashboard endpoints every 2 seconds
             setInterval(() => {
