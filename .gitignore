@@ -17,7 +17,7 @@ build/
 *.env
 
 # Database (do not commit production data)
-store_intelligence.db
+
 *.db
 *.sqlite
 *.sqlite3
@@ -26,12 +26,12 @@ store_intelligence.db
 *-shm
 
 # Model weights and state (large binary — download separately or dynamically generated)
-*.pt
+
 *.onnx
 *.pkl
 
 # CCTV footage (large media files — not for version control)
-CCTV Footage/
+
 annotated_*.mp4
 
 # Annotated output videos from pipeline
