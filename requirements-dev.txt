@@ -211,7 +211,7 @@ requests==2.31.0
     # via
     #   -r requirements.in
     #   ultralytics
-ruff==0.6.8
+ruff==0.15.15
     # via -r requirements-dev.in
 scipy==1.17.1
     # via ultralytics
