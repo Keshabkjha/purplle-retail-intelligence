@@ -669,6 +669,15 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
         offset_seconds = frame_num / fps
         current_time = base_time + timedelta(seconds=offset_seconds)
         ts_str = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        
+        # Write progress every 5 frames
+        if frame_num % 5 == 0 or frame_num == frame_count:
+            try:
+                with open("pipeline/simulation_progress.json", "w") as f:
+                    json.dict_dump = {"video": base_name, "frame": frame_num, "total": frame_count, "percent": int((frame_num/frame_count)*100)}
+                    json.dump(json.dict_dump, f)
+            except Exception:
+                pass
 
         # Run YOLO tracking every frame for smooth video
         results = model.track(frame, persist=True, verbose=False)

@@ -481,14 +481,28 @@
                 <button onclick="closeVideoModal()" class="text-slate-400 hover:text-white transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             
-            <p class="text-xs text-slate-400 mb-4 leading-relaxed">Select a video to run the live YOLO AI detection pipeline on. The metrics dashboard will update in real-time as the video is processed.</p>
+            <p class="text-xs text-slate-400 mb-4 leading-relaxed" id="video-modal-desc">Select a video to run the live YOLO AI detection pipeline on. The metrics dashboard will update in real-time as the video is processed.</p>
             
             <div id="video-loading" class="flex items-center justify-center py-6 text-slate-400">
                 <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
             </div>
             
+            <!-- Video List View -->
             <div id="video-list-container" class="hidden flex flex-col gap-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                 <!-- Videos will be injected here -->
+            </div>
+
+            <!-- Video Preview View -->
+            <div id="video-preview-container" class="hidden flex flex-col gap-4">
+                <div class="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video flex items-center justify-center">
+                    <video id="video-player" class="w-full h-full object-contain" controls autoplay muted loop playsinline></video>
+                </div>
+                <div class="flex justify-between items-center gap-3">
+                    <button onclick="showVideoList()" class="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-200 transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Back</button>
+                    <button id="btn-confirm-video" class="flex-1 px-4 py-2 rounded-lg bg-accentBlue hover:bg-blue-500 text-xs font-bold text-white transition-colors flex items-center justify-center gap-2 shadow-lg shadow-accentBlue/20">
+                        <i data-lucide="play" class="w-4 h-4"></i> Run Pipeline
+                    </button>
+                </div>
             </div>
             
             <div id="video-empty" class="hidden text-center py-4 bg-white/5 border border-white/5 rounded-lg">
@@ -1133,63 +1147,121 @@
         }
 
         // Video Modal Logic
+        let currentlySelectedVideo = null;
+
         async function triggerSimulation() {
             const modal = document.getElementById('video-modal');
             const modalContent = document.getElementById('video-modal-content');
-            const loading = document.getElementById('video-loading');
-            const listContainer = document.getElementById('video-list-container');
-            const emptyContainer = document.getElementById('video-empty');
             
             modal.classList.remove('hidden');
-            // small delay for transition
             setTimeout(() => {
                 modal.classList.remove('opacity-0');
                 modalContent.classList.remove('scale-95');
                 modalContent.classList.add('scale-100');
             }, 10);
 
-            // Fetch available videos
-            try {
-                const response = await fetch('/api/videos');
-                const data = await response.json();
-                
-                loading.classList.add('hidden');
-                listContainer.innerHTML = '';
-                
-                if (data.videos && data.videos.length > 0) {
-                    listContainer.classList.remove('hidden');
-                    emptyContainer.classList.add('hidden');
+            showVideoList(); // Default to list view
+        }
+
+        async function showVideoList() {
+            const loading = document.getElementById('video-loading');
+            const listContainer = document.getElementById('video-list-container');
+            const previewContainer = document.getElementById('video-preview-container');
+            const emptyContainer = document.getElementById('video-empty');
+            const desc = document.getElementById('video-modal-desc');
+            const player = document.getElementById('video-player');
+
+            // Pause video if playing
+            player.pause();
+            player.src = "";
+
+            previewContainer.classList.add('hidden');
+            emptyContainer.classList.add('hidden');
+            desc.classList.remove('hidden');
+            
+            // Only fetch if empty to save time
+            if (listContainer.children.length === 0) {
+                loading.classList.remove('hidden');
+                listContainer.classList.add('hidden');
+
+                try {
+                    const response = await fetch('/api/videos');
+                    const data = await response.json();
                     
-                    data.videos.forEach(video => {
-                        const videoBtn = document.createElement('button');
-                        videoBtn.className = "flex items-center justify-between w-full p-3 bg-white/5 border border-white/5 hover:border-accentBlue/50 hover:bg-white/10 rounded-xl transition-all duration-200 group text-left";
-                        videoBtn.onclick = () => startSimulation(video);
-                        videoBtn.innerHTML = `
-                            <div class="flex items-center gap-3">
-                                <div class="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/40 group-hover:text-white transition-colors">
-                                    <i data-lucide="film" class="w-4 h-4"></i>
+                    loading.classList.add('hidden');
+                    
+                    if (data.videos && data.videos.length > 0) {
+                        listContainer.classList.remove('hidden');
+                        
+                        data.videos.forEach(video => {
+                            const videoRow = document.createElement('div');
+                            videoRow.className = "flex items-center gap-2 w-full";
+                            
+                            // Preview Button
+                            const previewBtn = document.createElement('button');
+                            previewBtn.className = "flex-1 flex items-center justify-between p-3 bg-white/5 border border-white/5 hover:border-accentBlue/50 hover:bg-white/10 rounded-xl transition-all duration-200 group text-left";
+                            previewBtn.onclick = () => previewVideo(video);
+                            previewBtn.innerHTML = `
+                                <div class="flex items-center gap-3">
+                                    <div class="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/40 group-hover:text-white transition-colors">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                    </div>
+                                    <span class="text-sm font-semibold text-slate-200">${video}</span>
                                 </div>
-                                <span class="text-sm font-semibold text-slate-200">${video}</span>
-                            </div>
-                            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-white transition-colors"></i>
-                        `;
-                        listContainer.appendChild(videoBtn);
-                    });
-                    lucide.createIcons();
-                } else {
-                    listContainer.classList.add('hidden');
+                                <span class="text-[10px] uppercase font-bold text-slate-500 group-hover:text-accentBlue transition-colors">Preview</span>
+                            `;
+                            
+                            // Quick Run Button
+                            const runBtn = document.createElement('button');
+                            runBtn.className = "p-3 bg-white/5 border border-white/5 hover:border-accentGreen/50 hover:bg-accentGreen/20 text-slate-400 hover:text-accentGreen rounded-xl transition-all duration-200";
+                            runBtn.onclick = () => startSimulation(video);
+                            runBtn.innerHTML = `<i data-lucide="play" class="w-5 h-5"></i>`;
+                            
+                            videoRow.appendChild(previewBtn);
+                            videoRow.appendChild(runBtn);
+                            listContainer.appendChild(videoRow);
+                        });
+                        lucide.createIcons();
+                    } else {
+                        emptyContainer.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch videos", err);
+                    loading.classList.add('hidden');
                     emptyContainer.classList.remove('hidden');
                 }
-            } catch (err) {
-                console.error("Failed to fetch videos", err);
-                loading.classList.add('hidden');
-                emptyContainer.classList.remove('hidden');
+            } else {
+                listContainer.classList.remove('hidden');
             }
+        }
+
+        function previewVideo(videoName) {
+            const listContainer = document.getElementById('video-list-container');
+            const previewContainer = document.getElementById('video-preview-container');
+            const desc = document.getElementById('video-modal-desc');
+            const player = document.getElementById('video-player');
+            const confirmBtn = document.getElementById('btn-confirm-video');
+
+            listContainer.classList.add('hidden');
+            desc.classList.add('hidden');
+            previewContainer.classList.remove('hidden');
+
+            // Load and play video
+            player.src = `/api/video_stream/${videoName}`;
+            player.play();
+
+            // Set up confirm button
+            confirmBtn.onclick = () => startSimulation(videoName);
         }
 
         function closeVideoModal() {
             const modal = document.getElementById('video-modal');
             const modalContent = document.getElementById('video-modal-content');
+            const player = document.getElementById('video-player');
+            
+            player.pause();
+            player.src = "";
+            
             modal.classList.add('opacity-0');
             modalContent.classList.remove('scale-100');
             modalContent.classList.add('scale-95');
@@ -1197,6 +1269,7 @@
         }
 
         // Trigger Live HF Simulation
+        let simInterval = null;
         async function startSimulation(videoName) {
             closeVideoModal();
             
@@ -1216,18 +1289,42 @@
                 });
                 
                 if (response.ok) {
-                    btn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i> Pipeline Running';
                     btn.classList.replace('bg-pink-600', 'bg-accentGreen');
                     btn.classList.replace('hover:bg-pink-500', 'hover:bg-accentGreen');
                     btn.classList.replace('ring-pink-500/50', 'ring-accentGreen/50');
-                    setTimeout(() => {
-                        btn.innerHTML = originalHTML;
-                        btn.classList.remove('opacity-75', 'cursor-not-allowed');
-                        btn.classList.replace('bg-accentGreen', 'bg-pink-600');
-                        btn.classList.replace('hover:bg-accentGreen', 'hover:bg-pink-500');
-                        btn.classList.replace('ring-accentGreen/50', 'ring-pink-500/50');
-                        lucide.createIcons();
-                    }, 5000);
+                    
+                    // Poll for progress
+                    if(simInterval) clearInterval(simInterval);
+                    simInterval = setInterval(async () => {
+                        try {
+                            const pRes = await fetch('/api/simulation_status');
+                            const pData = await pRes.json();
+                            if (pData.percent !== undefined) {
+                                btn.innerHTML = `<i data-lucide="activity" class="w-4 h-4"></i> Processing: ${pData.percent}%`;
+                                lucide.createIcons();
+                                
+                                // Update button background as a progress bar effect
+                                btn.style.background = `linear-gradient(90deg, #10B981 ${pData.percent}%, #059669 ${pData.percent}%)`;
+
+                                if (pData.status === 'done' || pData.percent >= 100) {
+                                    clearInterval(simInterval);
+                                    btn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i> Complete';
+                                    lucide.createIcons();
+                                    setTimeout(() => {
+                                        btn.innerHTML = originalHTML;
+                                        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                                        btn.classList.replace('bg-accentGreen', 'bg-pink-600');
+                                        btn.classList.replace('hover:bg-accentGreen', 'hover:bg-pink-500');
+                                        btn.classList.replace('ring-accentGreen/50', 'ring-pink-500/50');
+                                        btn.style.background = '';
+                                        lucide.createIcons();
+                                    }, 3000);
+                                }
+                            }
+                        } catch (e) {
+                            console.error("Progress poll failed");
+                        }
+                    }, 1000);
                 }
             } catch (err) {
                 console.error("Simulation trigger failed", err);

@@ -473,9 +473,29 @@ def list_videos():
             videos.append(os.path.basename(file))
     return {"videos": sorted(videos)}
 
+
+@app.get("/api/video_stream/{video_name}")
+def stream_video(video_name: str):
+    """Serves the raw video file for previewing."""
+    from fastapi.responses import FileResponse
+    import os
+    cctv_dir = "CCTV Footage"
+    filepath = os.path.join(cctv_dir, os.path.basename(video_name))
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Video not found")
+    return FileResponse(filepath, media_type="video/mp4")
+
+
 @app.post("/api/simulate")
 def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks):
     """Trigger the live CV pipeline in the background on a specific video."""
+    import json
+    try:
+        with open("pipeline/simulation_progress.json", "w") as f:
+            json.dump({"status": "starting", "percent": 0, "video": req.video}, f)
+    except Exception:
+        pass
+
     def run_pipeline(video_name: str):
         import subprocess
         import os
@@ -493,6 +513,19 @@ def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks):
 
     background_tasks.add_task(run_pipeline, req.video)
     return {"status": "Simulation started in background.", "video": req.video}
+
+@app.get("/api/simulation_status")
+def get_simulation_status():
+    """Returns the current progress of the live simulation."""
+    import os, json
+    progress_file = "pipeline/simulation_progress.json"
+    if os.path.exists(progress_file):
+        try:
+            with open(progress_file, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {"status": "error", "percent": 0}
+    return {"status": "idle", "percent": 0}
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
