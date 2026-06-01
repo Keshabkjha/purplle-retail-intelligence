@@ -243,8 +243,8 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
         # Validate event schema manually using Pydantic
         try:
             event = EventSchema.model_validate(event_data)
-        except Exception as ve:
-            errors.append({"event_id": event_id, "error": f"Schema validation failed: {str(ve)}"})
+        except Exception:
+            errors.append({"event_id": event_id, "error": "Schema validation failed"})
             continue
 
         try:
@@ -300,9 +300,9 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
             db.rollback()
             # If unique constraint triggered but didn't catch in query
             success_count += 1
-        except Exception as e:
+        except Exception:
             db.rollback()
-            errors.append({"event_id": event.event_id, "error": str(e)})
+            errors.append({"event_id": event.event_id, "error": "Failed to ingest event"})
 
     return {
         "ingested": success_count,
