@@ -117,8 +117,8 @@ docker compose exec api python3 -m app.ingestion
 # 4. Verify the API is live
 curl http://localhost:8000/health
 
-# 5. Run the CV pipeline inside the container on a video clip
-docker compose exec api python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
+# 5. Run the CV pipeline on the host (edge client) streaming events to the API container
+python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 
 # 6. Open the live dashboard
 open http://localhost:8000/dashboard
@@ -191,11 +191,11 @@ docker compose exec api python3 -m app.ingestion
 ```
 
 ### Step 3: Run the Computer Vision Pipeline
-Process the CCTV clips in sequence inside the container. This runs detection + multi-signal Re-ID and streams events directly into the active REST API:
+Process the CCTV clips in sequence on the host (representing the local edge processor in a store setup). This runs detection + multi-signal Re-ID and streams events directly to the active REST API container:
 ```bash
-docker compose exec api python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
+python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 ```
-*Note: You can process all available cameras sequentially by running `docker compose exec api ./pipeline/run.sh`.*
+*Note: You can process all available cameras sequentially by running `./pipeline/run.sh`.*
 
 ### Step 4: Validate Ingestion & Performance Metrics
 Query the store metrics to confirm successful visitor tracking, dwell times, and POS conversion matches:
