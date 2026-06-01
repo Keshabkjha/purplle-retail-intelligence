@@ -240,7 +240,7 @@ tqdm==4.67.3
     # via ultralytics
 triton==3.7.0
     # via torch
-types-requests==2.31.0.20240406
+types-requests==2.33.0.20260518
     # via -r requirements-dev.in
 typing-extensions==4.15.0
     # via
