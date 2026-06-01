@@ -1,3 +1,12 @@
+---
+title: Purplle Retail Intelligence
+emoji: 🛍️
+colorFrom: indigo
+colorTo: pink
+sdk: docker
+app_port: 7860
+pinned: false
+---
 <p align="center">
   <img src="docs/assets/logo.png" alt="Purplle Retail Intelligence Logo" width="80" height="80" style="border-radius:16px">
 </p>
