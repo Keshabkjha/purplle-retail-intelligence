@@ -639,9 +639,10 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
 
     # Setup VideoWriter
     out_path = f"annotated_{base_name}"
+    temp_out_path = f"temp_annotated_{base_name}"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
-    print(f"Annotated output will be saved to: {out_path}")
+    out = cv2.VideoWriter(temp_out_path, fourcc, fps, (width, height))
+    print(f"Annotated temporary output will be saved to: {temp_out_path}")
 
     # Reset/clear cross-camera tracking state on entry camera run
     state_file = "pipeline/session_state.json"
@@ -984,6 +985,32 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
     cap.release()
     out.release()
     print(f"Finished processing {video_path}")
+
+    # Transcode temporary video to H.264 for web/browser compatibility
+    if os.path.exists(temp_out_path):
+        try:
+            print(f"Transcoding {temp_out_path} to H.264 using ffmpeg...")
+            import subprocess
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", temp_out_path,
+                "-vcodec", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart",
+                "-an",
+                out_path
+            ]
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"Transcoding complete. H.264 video saved to: {out_path}")
+            os.remove(temp_out_path)
+        except Exception as e:
+            print(f"Transcoding failed: {e}. Falling back to MPEG-4.")
+            if os.path.exists(out_path):
+                try:
+                    os.remove(out_path)
+                except Exception:
+                    pass
+            os.rename(temp_out_path, out_path)
 
 
 if __name__ == "__main__":

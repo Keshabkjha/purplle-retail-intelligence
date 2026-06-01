@@ -499,6 +499,7 @@ def get_store_system_stats(store_id: str, db: Session = Depends(get_db)):
 
 class SimulateRequest(BaseModel):
     video: str
+    force: Optional[bool] = False
 
 @app.get("/api/videos")
 def list_videos():
@@ -620,7 +621,7 @@ def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks, db: 
     cam_id = VIDEO_TO_CAM.get(safe_video)
 
     # Check if already processed
-    if cam_id:
+    if cam_id and not req.force:
         existing_count = (
             db.query(DBEvent)
             .filter(DBEvent.camera_id == cam_id)
@@ -640,6 +641,12 @@ def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks, db: 
                 "visitor_count": visitor_count,
             }
 
+    # If force reprocessing, clear existing events in DB to prevent duplicates
+    if cam_id and req.force:
+        print(f"Force reprocessing requested. Clearing existing events for camera: {cam_id}")
+        db.query(DBEvent).filter(DBEvent.camera_id == cam_id).delete()
+        db.commit()
+
     try:
         with open("pipeline/simulation_progress.json", "w") as f:
             json.dump({"status": "starting", "percent": 0, "video": req.video}, f)
@@ -655,7 +662,9 @@ def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks, db: 
             video_path = os.path.join("CCTV Footage", safe_video_name)
             
             if os.path.exists(video_path):
-                subprocess.run(["python3", "pipeline/detect.py", video_path], check=True)
+                env = os.environ.copy()
+                env["PYTHONPATH"] = os.getcwd()
+                subprocess.run(["python3", "pipeline/detect.py", video_path], check=True, env=env)
             else:
                 print(f"Simulation skipped: {video_path} not found.")
         except Exception as e:

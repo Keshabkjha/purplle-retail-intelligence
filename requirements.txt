@@ -197,7 +197,7 @@ typing-extensions==4.15.0
     #   torch
 tzdata==2026.2
     # via pandas
-ultralytics==8.1.29
+ultralytics==8.4.59
     # via -r requirements.in
 urllib3==2.7.0
     # via requests

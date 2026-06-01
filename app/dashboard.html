@@ -1425,9 +1425,9 @@
                     card.className = `flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all duration-200 cursor-pointer
                         ${isActive ? 'border-amber-400/60 bg-amber-400/10 text-amber-300' :
                           cam.is_processed ? 'border-white/10 bg-white/5 hover:border-indigo-400/40 hover:bg-white/10 text-slate-300' :
-                          'border-white/5 bg-white/2 text-slate-600 cursor-default'}`;
+                          'border-white/5 bg-white/2 hover:border-indigo-400/20 hover:bg-white/5 text-slate-500'}`;
                     card.onclick = () => {
-                        if (cam.is_processed) enterCameraMode(cam.camera_id, cam.display_name);
+                        enterCameraMode(cam.camera_id, cam.display_name);
                     };
                     card.innerHTML = `
                         <span class="text-[10px] font-bold uppercase tracking-wider truncate w-full">${cam.display_name}</span>
@@ -1513,6 +1513,9 @@
                                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
                                 </button>
                             ` : `
+                                <button onclick="previewVideo('${cam.video_file}')" class="p-2 rounded-lg bg-white/5 border border-white/10 hover:border-indigo-400/50 text-slate-400 hover:text-indigo-300 transition-all" title="Preview video">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
                                 <button onclick="startSimulation('${cam.video_file}', false)" class="px-3 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 text-xs font-bold text-white transition-all flex items-center gap-1.5">
                                     <i data-lucide="play" class="w-3.5 h-3.5"></i> Run Pipeline
                                 </button>
