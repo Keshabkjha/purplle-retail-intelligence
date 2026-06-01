@@ -1,10 +1,18 @@
 import os
 import json
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
-from pipeline.detect import CrossCameraSessionTracker, update_staff_status, compute_appearance_embedding, compare_appearance
+from pipeline.detect import (
+    CrossCameraSessionTracker,
+    update_staff_status,
+    compute_appearance_embedding,
+    compare_appearance,
+    camera_transition_prior,
+    zone_transition_prior,
+)
+from pipeline.adaptive_models import AdaptiveBinaryModel, build_identity_feature_vector, build_staff_feature_vector
 from app.main import app
 from app.database import SessionLocal, DBEvent, DBPOS, Base, engine
 from app.metrics import get_store_metrics_data
@@ -199,6 +207,71 @@ def test_appearance_based_matching(temp_state_file):
     )
     assert vid_match == "VIS_1"
 
+def test_transition_priors():
+    # Entry to main floor is a plausible transition, same camera should not score.
+    assert camera_transition_prior("CAM_ENTRY_01", "CAM_MAIN_01") > camera_transition_prior("CAM_ENTRY_01", "CAM_BILLING_01")
+    assert camera_transition_prior("CAM_MAIN_01", "CAM_MAIN_01") == 0.0
+
+    # Zone continuity should favor identical or adjacent retail-zone transitions.
+    assert zone_transition_prior("EB_KOREAN", "EB_KOREAN") == 1.0
+    assert zone_transition_prior("ENTRY", "EB_KOREAN") > zone_transition_prior("EB_KOREAN", "LAKME")
+
+
+def test_learned_staff_model_separates_examples(tmp_path):
+    model = AdaptiveBinaryModel(str(tmp_path / "staff.pkl"))
+
+    pos = build_staff_feature_vector(
+        torso_match_ratio=0.92,
+        is_clothing_staff=True,
+        zone_id="BILLING",
+        wx=860.0,
+        billing_duration_sec=150.0,
+        total_duration_sec=260.0,
+        camera_count=2,
+    )
+    neg = build_staff_feature_vector(
+        torso_match_ratio=0.08,
+        is_clothing_staff=False,
+        zone_id="EB_KOREAN",
+        wx=120.0,
+        billing_duration_sec=0.0,
+        total_duration_sec=40.0,
+        camera_count=1,
+    )
+
+    model.update(pos, 1)
+    model.update(neg, 0)
+
+    assert model.predict_proba(pos, fallback=0.0) > model.predict_proba(neg, fallback=0.0)
+
+
+def test_learned_identity_model_separates_examples(tmp_path):
+    model = AdaptiveBinaryModel(str(tmp_path / "identity.pkl"))
+
+    matched = build_identity_feature_vector(
+        spatial_score=0.96,
+        temporal_score=0.92,
+        visual_score=0.85,
+        camera_score=0.95,
+        zone_score=0.90,
+        dist_norm=0.04,
+        time_norm=0.08,
+    )
+    mismatched = build_identity_feature_vector(
+        spatial_score=0.10,
+        temporal_score=0.12,
+        visual_score=0.15,
+        camera_score=0.20,
+        zone_score=0.20,
+        dist_norm=0.90,
+        time_norm=0.88,
+    )
+
+    model.update(matched, 1)
+    model.update(mismatched, 0)
+
+    assert model.predict_proba(matched, fallback=0.0) > model.predict_proba(mismatched, fallback=0.0)
+
 def test_ingest_batch_size_limit(client):
     # Generating 501 mock events (exceeding cap of 500)
     large_batch = []
@@ -309,7 +382,7 @@ def test_stale_feed_latency(client, db_session):
     client.post("/events/ingest", json=[evt])
     
     # Mock last_ingest_time on the app state directly to simulate a 15-minute lag
-    app.state.last_ingest_time = datetime.utcnow() - timedelta(minutes=15)
+    app.state.last_ingest_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=15)
 
     res = client.get("/health")
     assert res.status_code == 200

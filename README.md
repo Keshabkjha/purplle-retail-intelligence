@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/keshabkjha/purplle-retail-intelligence/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-12%20passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white"></a>
+  <a href="https://github.com/keshabkjha/purplle-retail-intelligence/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-24%20passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://fastapi.tiangolo.com"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white"></a>
   <a href="https://docs.ultralytics.com"><img alt="YOLO11" src="https://img.shields.io/badge/YOLO11-Ultralytics-FF6B35?style=for-the-badge&logo=pytorch&logoColor=white"></a>
@@ -60,7 +60,7 @@ graph TD
     B --> C{YOLO11n + ByteTrack\nPerson Detection}
     C --> D[Homography Warp\nFloor Plan Mapping]
     D --> E{Point-in-Polygon\nZone Assignment}
-    E --> F[Structured JSON Events\nENTRY / ZONE_ENTER / ZONE_DWELL\nZONE_EXIT / EXIT / REENTRY\nBILLING_QUEUE_JOIN / ABANDON]
+    E --> F[Structured JSON Events\nENTRY / ZONE_ENTER / ZONE_DWELL\nZONE_EXIT / EXIT / REENTRY\nBILLING_QUEUE_JOIN / BILLING_QUEUE_ABANDON]
     F -->|POST /events/ingest| G[FastAPI Web Server\napp/main.py]
     G --> H[(SQLite Database\nstore_intelligence.db)]
     G --> I[REST API Endpoints\n/metrics /funnel /heatmap /anomalies]
@@ -143,14 +143,15 @@ python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 ### Option C: Run Tests
 
 ```bash
-# Run the full comprehensive test suite (21 tests covering edge cases)
+# Run the full comprehensive test suite (24 tests covering edge cases)
 python3 -m pytest tests/ -v
 
 # Expected output:
 # tests/test_cross_camera.py::test_appearance_based_matching PASSED
+# tests/test_cross_camera.py::test_transition_priors PASSED
 # tests/test_cross_camera.py::test_reentry_dwell_session_correction PASSED
 # tests/test_anomalies.py::test_conversion_drop_anomaly PASSED
-# ... 21 passed in ~3s ✅
+# ... 24 passed in ~3s ✅
 ```
 
 ---
@@ -407,11 +408,12 @@ flowchart LR
 
 ```
 tests/
-├── test_pipeline.py     # Entry/exit metrics, staff exclusion
-├── test_metrics.py      # Conversion rate, dwell time, queue depth
-└── test_anomalies.py    # Queue spike (WARN + CRITICAL), conversion drop, dead zones
+├── test_pipeline.py     # Entry/exit metrics, staff exclusion, re-entry
+├── test_metrics.py      # Conversion rate, dwell time, queue depth, validation
+├── test_anomalies.py    # Queue spike (WARN + CRITICAL), conversion drop, dead zones
+└── test_cross_camera.py # Cross-camera Re-ID, transition priors, batch limit, stale feed, smoke tests
 
-Total: 12 tests | Status: ✅ All Passing
+Total: 24 tests | Status: ✅ All Passing
 ```
 
 Run with:

@@ -19,7 +19,7 @@ videos=(
 for video in "${videos[@]}"; do
     if [ -f "$video" ]; then
         echo "🎥 Processing: $video..."
-        python3 pipeline/detect.py "$video"
+        PYTHONPATH=. python3 pipeline/detect.py "$video"
         echo "---------------------------------------------------------"
     else
         echo "⚠️ Warning: Video file not found: $video"

@@ -10,4 +10,5 @@ services:
     environment:
       - DATABASE_URL=sqlite:///./store_intelligence.db
       - ENV=dev
+      - PORT=8000
     restart: always

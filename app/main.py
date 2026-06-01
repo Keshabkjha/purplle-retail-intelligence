@@ -146,7 +146,7 @@ def health_check(request: Request, db: Session = Depends(get_db)):
 def ingest_events(events: List[Any], request: Request, db: Session = Depends(get_db)):
     if len(events) > 500:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Batch size exceeds the maximum limit of 500 events."
         )
 
@@ -293,4 +293,3 @@ def get_dashboard():
             with open(p, "r", encoding="utf-8") as f:
                 return HTMLResponse(content=f.read(), status_code=200)
     raise HTTPException(status_code=404, detail="Dashboard file not found.")
-
