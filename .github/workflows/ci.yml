@@ -79,4 +79,4 @@ jobs:
           push: false
           tags: purplle-retail-intelligence:ci
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max' || '' }}
