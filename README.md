@@ -111,14 +111,14 @@ cd purplle-retail-intelligence
 # 2. Start the API and database
 docker compose up -d --build
 
-# 3. Seed the POS transaction data
-python3 -m app.ingestion
+# 3. Seed the POS transaction data inside the container
+docker compose exec api python3 -m app.ingestion
 
 # 4. Verify the API is live
 curl http://localhost:8000/health
 
-# 5. Run the CV pipeline on a video
-python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
+# 5. Run the CV pipeline inside the container on a video clip
+docker compose exec api python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 
 # 6. Open the live dashboard
 open http://localhost:8000/dashboard
@@ -136,23 +136,86 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 # In a separate terminal, seed the POS data
 python3 -m app.ingestion
 
-# Run the pipeline
+# Run the pipeline locally on a video clip
 python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 ```
 
 ### Option C: Run Tests
 
 ```bash
-# Run the full test suite (12 tests)
+# Run the full comprehensive test suite (21 tests covering edge cases)
 python3 -m pytest tests/ -v
 
 # Expected output:
-# tests/test_pipeline.py::test_entry_exit_metrics     PASSED
-# tests/test_pipeline.py::test_staff_exclusion        PASSED
-# tests/test_metrics.py::test_conversion_rate         PASSED
-# tests/test_anomalies.py::test_billing_queue_spike   PASSED
-# ... 12 passed in 2.5s ✅
+# tests/test_cross_camera.py::test_appearance_based_matching PASSED
+# tests/test_cross_camera.py::test_reentry_dwell_session_correction PASSED
+# tests/test_anomalies.py::test_conversion_drop_anomaly PASSED
+# ... 21 passed in ~3s ✅
 ```
+
+---
+
+## 🧪 End-to-End Smoke Test Flow
+
+Follow this exact path from a clean clone to verify the entire system is fully integrated, operational, and production-ready.
+
+### Step 1: Spin Up Infrastructure
+Start the FastAPI server and database in Docker:
+```bash
+docker compose up -d --build
+```
+Wait a few seconds for database initialization, then verify the health status:
+```bash
+curl -s http://localhost:8000/health
+```
+**Expected Response**:
+```json
+{
+  "status": "healthy",
+  "database": "healthy",
+  "last_event_timestamp": null,
+  "stale_feed": false,
+  "stores": {}
+}
+```
+
+### Step 2: Seed POS Transactions
+Seed the Brigade Road, Bangalore store's actual POS CSV transaction database inside the running container:
+```bash
+docker compose exec api python3 -m app.ingestion
+```
+**Expected Output**:
+```
+🌱 Seeding POS transactions from: Brigade_Bangalore_10_April_26 (1)bc6219c.csv...
+✅ Successfully seeded 24 POS transaction records into tables.
+```
+
+### Step 3: Run the Computer Vision Pipeline
+Process the CCTV clips in sequence inside the container. This runs detection + multi-signal Re-ID and streams events directly into the active REST API:
+```bash
+docker compose exec api python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
+```
+*Note: You can process all available cameras sequentially by running `docker compose exec api ./pipeline/run.sh`.*
+
+### Step 4: Validate Ingestion & Performance Metrics
+Query the store metrics to confirm successful visitor tracking, dwell times, and POS conversion matches:
+```bash
+curl -s http://localhost:8000/stores/ST1008/metrics
+```
+**Expected Response**: A rich JSON response containing `unique_visitors`, `conversion_rate`, `average_dwell_minutes`, and `current_queue_depth`.
+
+### Step 5: Check Operations & Anomalies
+Query the active operational anomalies to inspect if any statistical warnings (conversion drops, queue depth spikes) have fired:
+```bash
+curl -s http://localhost:8000/stores/ST1008/anomalies
+```
+
+### Step 6: View the Dashboard
+Launch the self-contained live operations control room dashboard:
+```bash
+open http://localhost:8000/dashboard
+```
+Here, you'll see animated KPI cards, dynamic visitor conversion funnel flows, and a 2-dimensional zone intensity heatmap updated in real-time.
 
 ---
 
