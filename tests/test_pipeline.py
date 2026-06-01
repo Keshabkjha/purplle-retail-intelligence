@@ -1,8 +1,8 @@
 # PROMPT: Generate pytest unit tests for a computer vision spatial mapping pipeline. Cover ray-casting point-in-polygon checks (inside, outside, and boundary cases), camera coordinate to 2D store floor plan mapping transforms, and named zone determination.
 # CHANGES MADE: Created isolated unit test suite covering pipeline spatial mapping utilities.
 
-import pytest
-from pipeline.detect import point_in_polygon, map_camera_to_floor, determine_zone
+from pipeline.detect import determine_zone, map_camera_to_floor, point_in_polygon
+
 
 def test_point_in_polygon_square():
     # Simple 100x100 square polygon

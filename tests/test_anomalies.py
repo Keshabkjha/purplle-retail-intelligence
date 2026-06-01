@@ -1,15 +1,15 @@
 # PROMPT: Generate pytest unit tests for FastAPI anomalies detection endpoint (/stores/{id}/anomalies). Ensure they cover billing queue spikes (both WARN and CRITICAL severities), conversion drop anomalies when conversion rate falls below 10%, and dead zone operational warnings when retail zones receive 0 visits. Use an in-memory SQLite database setup.
 # CHANGES MADE: Refactored the database engine to use an in-memory SQLite URL with StaticPool, allowing reliable connection sharing across all test client calls without encountering file-locking or read-only database errors.
 
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-import uuid
 
+from app.database import Base, DBEvent, get_db
 from app.main import app
-from app.database import Base, get_db, DBEvent, DBPOS
 
 # Setup an in-memory SQLite database with StaticPool for connection persistence
 engine = create_engine(

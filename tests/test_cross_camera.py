@@ -1,9 +1,10 @@
 import os
-import json
-import numpy as np
 from datetime import datetime, timedelta
+
 import pytest
+
 from pipeline.detect import CrossCameraSessionTracker, update_staff_status
+
 
 @pytest.fixture
 def temp_state_file(tmp_path):

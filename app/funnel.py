@@ -1,13 +1,16 @@
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from app.database import DBEvent, DBPOS
+
+from app.database import DBPOS, DBEvent
 from app.metrics import parse_timestamp
+
 
 def get_store_funnel_data(store_id: str, db: Session):
     # 1. Fetch all customer events
     events = db.query(DBEvent).filter(
         DBEvent.store_id == store_id,
-        DBEvent.is_staff == False
+        DBEvent.is_staff.is_(False)
     ).order_by(DBEvent.timestamp).all()
 
     if not events:

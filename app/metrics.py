@@ -1,8 +1,10 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import datetime, timedelta
-from app.database import DBEvent, DBPOS
 import json
+from datetime import datetime, timedelta
+
+from sqlalchemy.orm import Session
+
+from app.database import DBPOS, DBEvent
+
 
 def parse_timestamp(ts_str):
     try:
@@ -18,7 +20,7 @@ def get_store_metrics_data(store_id: str, db: Session):
     # 1. Fetch all events for the store that are not staff
     events = db.query(DBEvent).filter(
         DBEvent.store_id == store_id,
-        DBEvent.is_staff == False
+        DBEvent.is_staff.is_(False)
     ).order_by(DBEvent.timestamp).all()
 
     if not events:

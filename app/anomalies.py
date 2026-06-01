@@ -1,9 +1,11 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from app.database import DBEvent, DBPOS
-from app.metrics import get_store_metrics_data, parse_timestamp
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from sqlalchemy.orm import Session
+
+from app.database import DBPOS, DBEvent
+from app.metrics import get_store_metrics_data, parse_timestamp
+
 
 def get_store_anomalies_data(store_id: str, db: Session):
     anomalies = []
@@ -72,7 +74,7 @@ def get_store_anomalies_data(store_id: str, db: Session):
         # Find all timestamps to establish a 7-day window
         all_events = db.query(DBEvent).filter(
             DBEvent.store_id == store_id,
-            DBEvent.is_staff == False
+            DBEvent.is_staff.is_(False)
         ).order_by(DBEvent.timestamp.desc()).all()
 
         if all_events:
@@ -136,7 +138,7 @@ def get_store_anomalies_data(store_id: str, db: Session):
             # Find the latest event timestamp to anchor the 30-min window
             latest_event = db.query(DBEvent).filter(
                 DBEvent.store_id == store_id,
-                DBEvent.is_staff == False
+                DBEvent.is_staff.is_(False)
             ).order_by(DBEvent.timestamp.desc()).first()
 
             if latest_event:
@@ -148,7 +150,7 @@ def get_store_anomalies_data(store_id: str, db: Session):
                     # Query zones visited within the last 30 minutes
                     recent_visited = db.query(DBEvent.zone_id).filter(
                         DBEvent.store_id == store_id,
-                        DBEvent.is_staff == False,
+                        DBEvent.is_staff.is_(False),
                         DBEvent.zone_id.isnot(None),
                         DBEvent.timestamp >= window_30m_start_str
                     ).distinct().all()
@@ -169,4 +171,3 @@ def get_store_anomalies_data(store_id: str, db: Session):
         "store_id": store_id,
         "anomalies": anomalies
     }
-

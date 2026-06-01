@@ -1,29 +1,32 @@
+import json
+import os
+import sys
+import uuid
+from datetime import datetime, timedelta
+
 import cv2
+import numpy as np
+import requests
 import torch
+from ultralytics import YOLO
 
 # PyTorch 2.6+ weights_only unpickling workaround for Ultralytics/YOLO models
 original_load = torch.load
+
 def patched_load(*args, **kwargs):
-    kwargs['weights_only'] = False
+    kwargs["weights_only"] = False
     try:
         return original_load(*args, **kwargs)
     except TypeError:
-        kwargs.pop('weights_only', None)
+        kwargs.pop("weights_only", None)
         return original_load(*args, **kwargs)
-torch.load = patched_load
 
-from ultralytics import YOLO
-import sys
-import os
-import json
-import requests
-import uuid
-from datetime import datetime, timedelta
-import numpy as np
+torch.load = patched_load
 
 # Load layouts
 LAYOUT_PATH = "config/store_layout.json"
 CALIBRATION_PATH = "config/calibration.json"
+INGEST_URL = os.getenv("INGEST_URL", "http://localhost:8000/events/ingest")
 
 for p in ("/workspace/config/store_layout.json", "/Users/keshabkumar/Purpple Challenge/config/store_layout.json"):
     if os.path.exists(p):
@@ -310,9 +313,8 @@ def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_st
 
 def post_event(event):
     """Posts a structured event to the FastAPI ingest endpoint."""
-    url = "http://localhost:8000/events/ingest"
     try:
-        response = requests.post(url, json=[event], timeout=2)
+        response = requests.post(INGEST_URL, json=[event], timeout=2)
         if response.status_code == 207:
             print(f"Event {event['event_type']} for VIS_{event['visitor_id']} ingested.")
         else:

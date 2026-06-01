@@ -1,6 +1,7 @@
 import os
-from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, JSON, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base
+
+from sqlalchemy import JSON, Boolean, Column, Float, Integer, String, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./store_intelligence.db")
 

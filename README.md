@@ -46,6 +46,20 @@ Purplle's physical stores were a complete analytics blind spot. This system solv
 
 ---
 
+## ✅ Goals & Scope
+
+| Area | Target |
+|---|---|
+| Deployment | Local dev, Docker Compose, and Render.com. Kubernetes is optional (no charts shipped). |
+| Supported OS | Linux and macOS. Windows via WSL2. |
+| Supported Python | 3.11–3.12 |
+| Performance | API ingest p95 < 150ms for batches ≤ 200 events. CV pipeline targets ~15 FPS per stream on CPU. |
+| Priority | Both the CV pipeline (reference implementation) and API surface (production interface). |
+
+If your deployment or SLAs differ, update this section and the operational guide.
+
+---
+
 ## 🏗️ Architecture
 
 <p align="center">
@@ -125,7 +139,7 @@ open http://localhost:8000/dashboard
 
 ```bash
 # Install dependencies
-pip install -r api-requirements.txt
+pip install -r requirements-dev.txt
 
 # Start the API server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -137,8 +151,8 @@ python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 ### Option C: Run Tests
 
 ```bash
-# Run the full test suite (12 tests)
-python3 -m pytest tests/ -v
+# Run the full test suite (19 tests)
+python3 -m pytest
 
 # Expected output:
 # tests/test_pipeline.py::test_entry_exit_metrics     PASSED
@@ -161,6 +175,8 @@ Interactive docs available at: `http://localhost:8000/docs` (Swagger UI)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Per-store health status, feed latency, stale detection |
+| `GET` | `/ready` | Readiness probe (database + ingest freshness) |
+| `GET` | `/live` | Liveness probe |
 | `POST` | `/events/ingest` | Bulk ingest structured visitor events (idempotent) |
 | `GET` | `/stores/{id}/metrics` | KPIs: visitors, conversion rate, dwell time, queue depth |
 | `GET` | `/stores/{id}/funnel` | 4-stage visitor conversion funnel with drop-off rates |
@@ -342,13 +358,59 @@ tests/
 ├── test_metrics.py      # Conversion rate, dwell time, queue depth
 └── test_anomalies.py    # Queue spike (WARN + CRITICAL), conversion drop, dead zones
 
-Total: 12 tests | Status: ✅ All Passing
+Total: 19 tests | Status: ✅ All Passing
 ```
 
 Run with:
 ```bash
-python3 -m pytest tests/ -v --tb=short
+python3 -m pytest --tb=short
 ```
+
+---
+
+## ⚙️ Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./store_intelligence.db` | Database connection string |
+| `ENV` | `dev` | Environment name (`dev`/`prod`) |
+| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
+| `RATE_LIMIT_PER_MINUTE` | `120` | Per-IP request limit |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window in seconds |
+| `MAX_INGEST_BATCH` | `500` | Maximum events per ingest request |
+| `INGEST_URL` | `http://localhost:8000/events/ingest` | Pipeline ingest endpoint |
+
+For production deployments, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+---
+
+## 🧰 Quality & Tooling
+
+```bash
+# Lint + format
+ruff check . --fix
+ruff format .
+
+# Type checks
+mypy
+
+# Tests + coverage
+pytest
+```
+
+Pre-commit hooks:
+```bash
+pre-commit install
+```
+
+---
+
+## 🔐 Security
+
+- Dependency updates: Dependabot
+- Static analysis: CodeQL
+- Secret scanning: gitleaks workflow
+- Threat model: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)
 
 ---
 
@@ -397,7 +459,7 @@ python3 pipeline/calibrate.py Revised.png
 ### Render.com (Recommended)
 
 1. Connect your GitHub repository on [render.com](https://render.com)
-2. Set **Build Command**: `pip install -r api-requirements.txt`
+2. Set **Build Command**: `pip install -r requirements.txt`
 3. Set **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port 10000`
 4. Dashboard will be live at `https://your-service.onrender.com/dashboard`
 
@@ -409,6 +471,15 @@ python3 pipeline/calibrate.py Revised.png
 |---|---|
 | [DESIGN.md](docs/DESIGN.md) | Full architecture overview, AI-assisted decision log, trade-off rationale |
 | [CHOICES.md](docs/CHOICES.md) | Library selection reasoning, engineering trade-offs |
+| [OPERATIONS.md](docs/OPERATIONS.md) | Configuration, observability, and production guidance |
+| [THREAT_MODEL.md](docs/THREAT_MODEL.md) | Security assumptions and mitigations |
+
+---
+
+## 📦 Releases & Support
+
+- Versioning: Semantic Versioning (see [CHANGELOG.md](CHANGELOG.md))
+- Support policy: [SUPPORT.md](SUPPORT.md)
 
 ---
 
