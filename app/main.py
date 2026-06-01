@@ -513,15 +513,64 @@ def list_videos():
     return {"videos": sorted(videos)}
 
 
+def send_bytes_range_requests(file_path: str, range_header: str):
+    """Helper to stream file chunks supporting HTTP Range requests (crucial for macOS Safari/Chrome)."""
+    from fastapi.responses import StreamingResponse
+    import os
+    
+    file_size = os.path.getsize(file_path)
+    
+    # Parse Range Header (bytes=start-end)
+    range_header = range_header.replace("bytes=", "")
+    parts = range_header.split("-")
+    start = int(parts[0]) if parts[0] else 0
+    end = int(parts[1]) if len(parts) > 1 and parts[1] else file_size - 1
+    
+    if start >= file_size:
+        raise HTTPException(status_code=416, detail="Requested Range Not Satisfiable")
+    
+    end = min(end, file_size - 1)
+    chunk_size = end - start + 1
+    
+    def file_iterator():
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            remaining = chunk_size
+            while remaining > 0:
+                to_read = min(remaining, 1024 * 1024)  # 1MB chunks
+                data = f.read(to_read)
+                if not data:
+                    break
+                remaining -= len(data)
+                yield data
+                
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(chunk_size),
+        "Content-Type": "video/mp4",
+    }
+    
+    return StreamingResponse(file_iterator(), status_code=206, headers=headers)
+
+
 @app.get("/api/video_stream/{video_name}")
-def stream_video(video_name: str):
-    """Serves the raw video file for previewing."""
+def stream_video(video_name: str, request: Request):
+    """Serves the raw video file supporting partial content range requests."""
     from fastapi.responses import FileResponse
     import os
     cctv_dir = "CCTV Footage"
     filepath = os.path.join(cctv_dir, os.path.basename(video_name))
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Video not found")
+        
+    range_header = request.headers.get("range")
+    if range_header:
+        try:
+            return send_bytes_range_requests(filepath, range_header)
+        except Exception as e:
+            print(f"Range request failed: {e}")
+            
     return FileResponse(filepath, media_type="video/mp4")
 
 
@@ -535,14 +584,22 @@ def check_annotated_exists(video_name: str):
 
 
 @app.get("/api/annotated_stream/{video_name}")
-def stream_annotated_video(video_name: str):
-    """Serves the annotated video file from the root directory."""
+def stream_annotated_video(video_name: str, request: Request):
+    """Serves the annotated video file from the root directory supporting partial content range requests."""
     from fastapi.responses import FileResponse
     import os
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     filepath = os.path.join(base_dir, f"annotated_{os.path.basename(video_name)}")
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Annotated video not found")
+        
+    range_header = request.headers.get("range")
+    if range_header:
+        try:
+            return send_bytes_range_requests(filepath, range_header)
+        except Exception as e:
+            print(f"Range request failed: {e}")
+            
     return FileResponse(filepath, media_type="video/mp4")
 
 
