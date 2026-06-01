@@ -1,21 +1,18 @@
 import csv
 import os
 import sys
-from app.database import SessionLocal, DBPOS, init_db
+
+from app.database import DBPOS, SessionLocal, init_db
 
 def seed_pos_data():
-    csv_file = "Brigade_Bangalore_10_April_26 (1)bc6219c.csv"
-    if not os.path.exists(csv_file):
-        # Check in alternative path locations
-        for alt_path in ("/workspace/Brigade_Bangalore_10_April_26 (1)bc6219c.csv", 
-                         "/Users/keshabkumar/Purpple Challenge/Brigade_Bangalore_10_April_26 (1)bc6219c.csv"):
-            if os.path.exists(alt_path):
-                csv_file = alt_path
-                break
-
-    if not os.path.exists(csv_file):
-        print(f"Error: POS CSV file '{csv_file}' not found.")
+    import glob
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    csv_files = glob.glob(os.path.join(base_dir, "*.csv"))
+    if not csv_files:
+        print("Error: POS CSV file not found in root directory.")
         sys.exit(1)
+    
+    csv_file = csv_files[0]
         
     print(f"🌱 Seeding POS transactions from: {csv_file}...")
     db = SessionLocal()

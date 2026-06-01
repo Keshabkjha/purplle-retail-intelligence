@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.anomalies import get_store_anomalies_data
-from app.database import DBEvent, get_db, init_db
+from app.database import DBEvent, DBPOS, get_db, init_db
 from app.funnel import get_store_funnel_data
 from app.heatmap import get_store_heatmap_data
 from app.metrics import get_store_metrics_data, parse_timestamp
@@ -395,7 +395,7 @@ def get_store_system_stats(store_id: str, db: Session = Depends(get_db)):
         db_size = os.path.getsize("store_intelligence.db")
     
     try:
-        from app.database import DBEvent, DBPOS
+
         event_count = db.query(DBEvent).count()
         pos_count = db.query(DBPOS).count()
     except Exception:
@@ -426,9 +426,9 @@ def get_store_system_stats(store_id: str, db: Session = Depends(get_db)):
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard():
     import os
-    dashboard_paths = ("app/dashboard.html", "/workspace/app/dashboard.html", "/Users/keshabkumar/Purpple Challenge/app/dashboard.html")
-    for p in dashboard_paths:
-        if os.path.exists(p):
-            with open(p, "r", encoding="utf-8") as f:
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    dashboard_path = os.path.join(base_dir, "app", "dashboard.html")
+    if os.path.exists(dashboard_path):
+        with open(dashboard_path, "r", encoding="utf-8") as f:
                 return HTMLResponse(content=f.read(), status_code=200)
     raise HTTPException(status_code=404, detail="Dashboard file not found.")

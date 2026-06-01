@@ -23,28 +23,19 @@ def patched_load(*args, **kwargs):
 
 torch.load = patched_load
 
-from pipeline.adaptive_models import (
+from pipeline.adaptive_models import (  # noqa: E402
     AdaptiveModelRegistry,
     build_identity_feature_vector,
     build_staff_feature_vector,
 )
 
 # Load layouts
-LAYOUT_PATH = "config/store_layout.json"
-CALIBRATION_PATH = "config/calibration.json"
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LAYOUT_PATH = os.path.join(ROOT_DIR, "config", "store_layout.json")
+CALIBRATION_PATH = os.path.join(ROOT_DIR, "config", "calibration.json")
 INGEST_URL = os.getenv("INGEST_URL", "http://localhost:8000/events/ingest")
 
-for p in ("/workspace/config/store_layout.json", "/Users/keshabkumar/Purpple Challenge/config/store_layout.json"):
-    if os.path.exists(p):
-        LAYOUT_PATH = p
-        break
-
-for p in ("/workspace/config/calibration.json", "/Users/keshabkumar/Purpple Challenge/config/calibration.json"):
-    if os.path.exists(p):
-        CALIBRATION_PATH = p
-        break
-
-store_id = "ST1008"
+store_id = os.getenv("STORE_ID", "ST1008")
 zones = []
 cameras_mapping = {}
 

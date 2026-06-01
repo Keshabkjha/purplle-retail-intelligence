@@ -11,7 +11,6 @@ import argparse
 import json
 from pathlib import Path
 
-
 STAFF_TEMPLATE = {
     "torso_match_ratio": 0.0,
     "is_clothing_staff": False,

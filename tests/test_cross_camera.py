@@ -1,22 +1,14 @@
-import os
-from datetime import datetime, timedelta
-
-import pytest
-
-from pipeline.detect import CrossCameraSessionTracker, update_staff_status
 import json
-import numpy as np
+import os
 from datetime import datetime, timedelta, timezone
+
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-from pipeline.detect import (
-    CrossCameraSessionTracker,
-    update_staff_status,
-    compute_appearance_embedding,
-    compare_appearance,
-    camera_transition_prior,
-    zone_transition_prior,
-)
+
+from app.database import Base, DBEvent, SessionLocal, engine
+from app.main import app
+from app.metrics import get_store_metrics_data
 from pipeline.adaptive_models import (
     AdaptiveBinaryModel,
     AdaptiveModelRegistry,
@@ -26,10 +18,14 @@ from pipeline.adaptive_models import (
     train_identity_model_from_jsonl,
     train_staff_model_from_jsonl,
 )
-from app.main import app
-from app.database import SessionLocal, DBEvent, DBPOS, Base, engine
-from app.metrics import get_store_metrics_data
-
+from pipeline.detect import (
+    CrossCameraSessionTracker,
+    camera_transition_prior,
+    compare_appearance,
+    compute_appearance_embedding,
+    update_staff_status,
+    zone_transition_prior,
+)
 
 @pytest.fixture
 def temp_state_file(tmp_path):

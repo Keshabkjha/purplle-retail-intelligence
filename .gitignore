@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 venv/
+.venv/
 env/
 *.egg-info/
 dist/
@@ -57,9 +58,10 @@ htmlcov/
 *.log
 logs/
 
-# Challenge PDFs (keep in your local workspace)
+# Challenge PDFs and datasets (keep in your local workspace)
 *.pdf
 *.xlsx
+*.csv
 
 # Transient state files
 pipeline/session_state.json

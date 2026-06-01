@@ -172,7 +172,7 @@
                     PURPLLE RETAIL • INTELLIGENCE HUB
                 </h1>
                 <p class="text-xs text-slate-400 font-medium tracking-wider flex items-center gap-1.5 mt-0.5 uppercase">
-                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-accentBlue"></span> Store ID: ST1008 (Brigade Road, Bangalore)
+                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-accentBlue"></span> Store ID: <span id="store-id-display">ST1008</span>
                 </p>
             </div>
         </div>
@@ -474,7 +474,8 @@
     </footer>
 
     <script>
-        const storeId = "ST1008";
+        const storeId = new URLSearchParams(window.location.search).get("store_id") || "ST1008";
+        document.getElementById("store-id-display").textContent = storeId;
         const seenEventIds = new Set();
         let conversionChart = null;
         let abandonChart = null;
@@ -534,7 +535,7 @@
                 const mockPayloads = [
                     {
                         "event_id": "f83918b9-4a92-498c-8c19-1c9f828cf9b3",
-                        "store_id": "ST1008",
+                        "store_id": storeId,
                         "camera_id": "CAM_MAIN_01",
                         "visitor_id": `VIS_VIS_${Math.floor(Math.random() * 500) + 1}`,
                         "event_type": "ZONE_DWELL",
@@ -547,7 +548,7 @@
                     },
                     {
                         "event_id": "18c991ba-4f8e-49b8-b389-cf92c28ef9b3",
-                        "store_id": "ST1008",
+                        "store_id": storeId,
                         "camera_id": "CAM_BILLING_01",
                         "visitor_id": `VIS_VIS_${Math.floor(Math.random() * 500) + 1}`,
                         "event_type": "BILLING_QUEUE_JOIN",

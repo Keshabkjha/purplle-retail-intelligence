@@ -12,7 +12,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent
 DATA_LABELS_DIR = ROOT / "data" / "labels"
 EXAMPLES_DIR = ROOT / "examples" / "labels"

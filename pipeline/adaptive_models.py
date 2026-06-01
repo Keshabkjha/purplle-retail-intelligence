@@ -3,7 +3,7 @@ import os
 import pickle
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression, SGDClassifier

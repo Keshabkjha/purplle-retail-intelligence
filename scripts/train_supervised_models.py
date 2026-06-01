@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from pipeline.adaptive_models import (
+from pipeline.adaptive_models import (  # noqa: E402
     train_identity_model_from_jsonl,
     train_staff_model_from_jsonl,
 )

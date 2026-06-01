@@ -21,7 +21,7 @@ def get_store_anomalies_data(store_id: str, db: Session):
     # Establish temporal anchors from latest event timestamp
     latest_event = db.query(DBEvent).filter(
         DBEvent.store_id == store_id,
-        DBEvent.is_staff == False
+        DBEvent.is_staff.is_(False)
     ).order_by(DBEvent.timestamp.desc()).first()
 
     latest_ts = None
@@ -110,7 +110,7 @@ def get_store_anomalies_data(store_id: str, db: Session):
                 # Daily unique visitors
                 day_unique = db.query(DBEvent.visitor_id).filter(
                     DBEvent.store_id == store_id,
-                    DBEvent.is_staff == False,
+                    DBEvent.is_staff.is_(False),
                     DBEvent.timestamp >= d_start_str,
                     DBEvent.timestamp <= d_end_str
                 ).distinct().count()
@@ -152,13 +152,8 @@ def get_store_anomalies_data(store_id: str, db: Session):
     # Flag retail zones that had 0 customer visits in the past 30 minutes
     # -----------------------------------------------------------------------
     import os
-    layout_path = "config/store_layout.json"
-    if not os.path.exists(layout_path):
-        for p in ("/workspace/config/store_layout.json", "/Users/keshabkumar/Purpple Challenge/config/store_layout.json",
-                  "/Users/keshabkumar/purplle-retail-intelligence/config/store_layout.json"):
-            if os.path.exists(p):
-                layout_path = p
-                break
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    layout_path = os.path.join(base_dir, "config", "store_layout.json")
 
     if os.path.exists(layout_path):
         try:
@@ -192,7 +187,7 @@ def get_store_anomalies_data(store_id: str, db: Session):
                     # Only flag dead zones if there was active traffic (at least 1 customer) in the store during this 30m window
                     total_recent_visitors = db.query(DBEvent.visitor_id).filter(
                         DBEvent.store_id == store_id,
-                        DBEvent.is_staff == False,
+                        DBEvent.is_staff.is_(False),
                         DBEvent.timestamp >= window_30m_start_str
                     ).distinct().count()
 
