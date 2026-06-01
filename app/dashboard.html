@@ -146,6 +146,17 @@
             opacity: 1;
             bottom: 120%;
         }
+
+        /* Matrix/calibration grid pattern for Engineer Mode */
+        .calibration-grid-active {
+            background-image: 
+                radial-gradient(rgba(16, 185, 129, 0.15) 1px, transparent 1px),
+                linear-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px) !important;
+            background-size: 16px 16px, 32px 32px;
+            border-color: rgba(16, 185, 129, 0.3) !important;
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.1) inset !important;
+            transition: all 0.5s ease-in-out;
+        }
     </style>
 </head>
 <body class="text-slate-100 min-height-screen flex flex-col overflow-x-hidden">
@@ -477,16 +488,28 @@
             const btnExec = document.getElementById('btn-mode-exec');
             const btnEng = document.getElementById('btn-mode-eng');
             const telemetryPanel = document.getElementById('eng-telemetry-panel');
+            const storeMap = document.getElementById('store-visual-map');
             
             if (mode === 'eng') {
                 btnExec.className = "px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-all duration-300 flex items-center gap-1.5";
                 btnEng.className = "px-4 py-2 rounded-lg bg-primary text-white shadow-md shadow-primary/20 transition-all duration-300 flex items-center gap-1.5";
                 telemetryPanel.classList.remove('hidden');
+                if (storeMap) {
+                    storeMap.classList.add('calibration-grid-active');
+                }
                 fetchSystemStats();
+                
+                // Smoothly scroll down to the diagnostics telemetry panel
+                setTimeout(() => {
+                    telemetryPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
             } else {
                 btnExec.className = "px-4 py-2 rounded-lg bg-primary text-white shadow-md shadow-primary/20 transition-all duration-300 flex items-center gap-1.5";
                 btnEng.className = "px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-all duration-300 flex items-center gap-1.5";
                 telemetryPanel.classList.add('hidden');
+                if (storeMap) {
+                    storeMap.classList.remove('calibration-grid-active');
+                }
             }
         }
 
@@ -553,9 +576,28 @@
             const markerId = `m-${Math.random().toString(36).substr(2, 9)}`;
             const colorClass = isStaff ? 'bg-accentRed shadow-[0_0_8px_#ef4444]' : 'bg-accentBlue shadow-[0_0_8px_#06b6d4]';
             
+            // Generate distinct calibration coordinate offsets for visual realism
+            const coordMap = {
+                'ENTRY': { x: 45, y: 120 },
+                'EB_KOREAN': { x: 152, y: 108 },
+                'THE_FACE_SHOP': { x: 248, y: 112 },
+                'MINIMALIST': { x: 351, y: 105 },
+                'LAKME': { x: 149, y: 215 },
+                'MAYBELLINE': { x: 253, y: 208 },
+                'GOOD_VIBES': { x: 347, y: 212 },
+                'BILLING': { x: 482, y: 165 }
+            };
+            const coords = coordMap[zoneId] || { x: 200, y: 150 };
+            
+            // In Engineer Mode, add a premium floating green calibration label
+            const labelHtml = (dashboardMode === 'eng')
+                ? `<span class="absolute -top-3 left-4 text-[8px] font-mono text-emerald-400 bg-black/80 px-1 py-0.5 rounded border border-emerald-500/30 tracking-tighter whitespace-nowrap z-20">x:${coords.x}, y:${coords.y}</span>`
+                : '';
+
             const elementHtml = `
                 <span class="w-2.5 h-2.5 rounded-full ${colorClass} animate-ping relative flex items-center justify-center" id="${markerId}">
                     <span class="absolute w-1.5 h-1.5 rounded-full bg-white"></span>
+                    ${labelHtml}
                 </span>
             `;
             
