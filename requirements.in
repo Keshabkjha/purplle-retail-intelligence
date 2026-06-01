@@ -4,7 +4,7 @@ pydantic==2.6.4
 sqlalchemy==2.0.38
 psycopg2-binary==2.9.9
 ultralytics==8.1.29
-opencv-python-headless==4.9.0.80
+opencv-python-headless==4.11.0.86
 requests==2.31.0
 pandas==2.2.1
 numpy==1.26.4
