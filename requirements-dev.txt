@@ -4,6 +4,8 @@
 #
 #    pip-compile --output-file=requirements-dev.txt requirements-dev.in
 #
+annotated-doc==0.0.4
+    # via fastapi
 annotated-types==0.7.0
     # via pydantic
 anyio==4.13.0
@@ -39,7 +41,7 @@ cycler==0.12.1
     # via matplotlib
 distlib==0.4.0
     # via virtualenv
-fastapi==0.115.11
+fastapi==0.125.0
     # via -r requirements.in
 filelock==3.29.0
     # via
