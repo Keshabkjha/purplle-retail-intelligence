@@ -473,6 +473,36 @@
 
     </main>
 
+    <!-- Video Selection Modal (Hidden by default) -->
+    <div id="video-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300 opacity-0">
+        <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 shadow-2xl transform scale-95 transition-transform duration-300" id="video-modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2"><i data-lucide="video" class="w-5 h-5 text-accentBlue"></i> Select Camera Feed</h2>
+                <button onclick="closeVideoModal()" class="text-slate-400 hover:text-white transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <p class="text-xs text-slate-400 mb-4 leading-relaxed">Select a video to run the live YOLO AI detection pipeline on. The metrics dashboard will update in real-time as the video is processed.</p>
+            
+            <div id="video-loading" class="flex items-center justify-center py-6 text-slate-400">
+                <i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i>
+            </div>
+            
+            <div id="video-list-container" class="hidden flex flex-col gap-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                <!-- Videos will be injected here -->
+            </div>
+            
+            <div id="video-empty" class="hidden text-center py-4 bg-white/5 border border-white/5 rounded-lg">
+                <i data-lucide="alert-circle" class="w-6 h-6 text-accentOrange mx-auto mb-2"></i>
+                <p class="text-xs font-semibold text-slate-300">No videos found.</p>
+                <p class="text-[10px] text-slate-500 mt-1">Upload mp4 files to the 'CCTV Footage' directory on Hugging Face.</p>
+            </div>
+            
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeVideoModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition-colors">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <footer class="w-full py-4 border-t border-white/5 mt-8 bg-darkBg/50 backdrop-blur-md">
         <p class="text-center text-[10px] font-bold tracking-[0.2em] text-slate-500 uppercase">
         © 2026 PURPLLE RETAIL INTELLIGENCE • ALL SYSTEMS ACTIVE
@@ -1099,6 +1129,111 @@
 
             } catch (err) {
                 console.error("Error updating dashboard:", err);
+            }
+        }
+
+        // Video Modal Logic
+        async function triggerSimulation() {
+            const modal = document.getElementById('video-modal');
+            const modalContent = document.getElementById('video-modal-content');
+            const loading = document.getElementById('video-loading');
+            const listContainer = document.getElementById('video-list-container');
+            const emptyContainer = document.getElementById('video-empty');
+            
+            modal.classList.remove('hidden');
+            // small delay for transition
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            }, 10);
+
+            // Fetch available videos
+            try {
+                const response = await fetch('/api/videos');
+                const data = await response.json();
+                
+                loading.classList.add('hidden');
+                listContainer.innerHTML = '';
+                
+                if (data.videos && data.videos.length > 0) {
+                    listContainer.classList.remove('hidden');
+                    emptyContainer.classList.add('hidden');
+                    
+                    data.videos.forEach(video => {
+                        const videoBtn = document.createElement('button');
+                        videoBtn.className = "flex items-center justify-between w-full p-3 bg-white/5 border border-white/5 hover:border-accentBlue/50 hover:bg-white/10 rounded-xl transition-all duration-200 group text-left";
+                        videoBtn.onclick = () => startSimulation(video);
+                        videoBtn.innerHTML = `
+                            <div class="flex items-center gap-3">
+                                <div class="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/40 group-hover:text-white transition-colors">
+                                    <i data-lucide="film" class="w-4 h-4"></i>
+                                </div>
+                                <span class="text-sm font-semibold text-slate-200">${video}</span>
+                            </div>
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-white transition-colors"></i>
+                        `;
+                        listContainer.appendChild(videoBtn);
+                    });
+                    lucide.createIcons();
+                } else {
+                    listContainer.classList.add('hidden');
+                    emptyContainer.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error("Failed to fetch videos", err);
+                loading.classList.add('hidden');
+                emptyContainer.classList.remove('hidden');
+            }
+        }
+
+        function closeVideoModal() {
+            const modal = document.getElementById('video-modal');
+            const modalContent = document.getElementById('video-modal-content');
+            modal.classList.add('opacity-0');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        // Trigger Live HF Simulation
+        async function startSimulation(videoName) {
+            closeVideoModal();
+            
+            const btn = document.getElementById('btn-run-simulation');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Starting...';
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            lucide.createIcons();
+
+            try {
+                const response = await fetch('/api/simulate', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ video: videoName })
+                });
+                
+                if (response.ok) {
+                    btn.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4"></i> Pipeline Running';
+                    btn.classList.replace('bg-pink-600', 'bg-accentGreen');
+                    btn.classList.replace('hover:bg-pink-500', 'hover:bg-accentGreen');
+                    btn.classList.replace('ring-pink-500/50', 'ring-accentGreen/50');
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                        btn.classList.replace('bg-accentGreen', 'bg-pink-600');
+                        btn.classList.replace('hover:bg-accentGreen', 'hover:bg-pink-500');
+                        btn.classList.replace('ring-accentGreen/50', 'ring-pink-500/50');
+                        lucide.createIcons();
+                    }, 5000);
+                }
+            } catch (err) {
+                console.error("Simulation trigger failed", err);
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                lucide.createIcons();
             }
         }
 

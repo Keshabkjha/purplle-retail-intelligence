@@ -12,6 +12,7 @@ from typing import Any, Deque, Dict, List, Tuple
 from fastapi import Depends, FastAPI, HTTPException, Request, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -457,17 +458,31 @@ def get_store_system_stats(store_id: str, db: Session = Depends(get_db)):
         ],
     }
 
+class SimulateRequest(BaseModel):
+    video: str
+
+@app.get("/api/videos")
+def list_videos():
+    """Returns a list of available mp4 videos in the CCTV Footage directory."""
+    import os
+    import glob
+    videos = []
+    cctv_dir = "CCTV Footage"
+    if os.path.exists(cctv_dir):
+        for file in glob.glob(os.path.join(cctv_dir, "*.mp4")):
+            videos.append(os.path.basename(file))
+    return {"videos": sorted(videos)}
+
 @app.post("/api/simulate")
-def run_simulation(background_tasks: BackgroundTasks):
-    """Trigger the live CV pipeline in the background on Hugging Face."""
-    def run_pipeline():
+def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks):
+    """Trigger the live CV pipeline in the background on a specific video."""
+    def run_pipeline(video_name: str):
         import subprocess
         import os
         try:
-            # Prefer a short sample video uploaded for HF, fallback to full entry camera
-            video_path = "sample.mp4"
-            if not os.path.exists(video_path):
-                video_path = "CCTV Footage/entry_camera.mp4"
+            # Ensure no directory traversal hacking
+            safe_video_name = os.path.basename(video_name)
+            video_path = os.path.join("CCTV Footage", safe_video_name)
             
             if os.path.exists(video_path):
                 subprocess.run(["python3", "pipeline/detect.py", video_path], check=True)
@@ -476,8 +491,8 @@ def run_simulation(background_tasks: BackgroundTasks):
         except Exception as e:
             print(f"Simulation failed: {e}")
 
-    background_tasks.add_task(run_pipeline)
-    return {"status": "Simulation started in background. Dashboard will update live."}
+    background_tasks.add_task(run_pipeline, req.video)
+    return {"status": "Simulation started in background.", "video": req.video}
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
