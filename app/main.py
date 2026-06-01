@@ -525,6 +525,27 @@ def stream_video(video_name: str):
     return FileResponse(filepath, media_type="video/mp4")
 
 
+@app.get("/api/annotated_exists/{video_name}")
+def check_annotated_exists(video_name: str):
+    """Checks if the annotated video file exists."""
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    filepath = os.path.join(base_dir, f"annotated_{os.path.basename(video_name)}")
+    return {"exists": os.path.exists(filepath)}
+
+
+@app.get("/api/annotated_stream/{video_name}")
+def stream_annotated_video(video_name: str):
+    """Serves the annotated video file from the root directory."""
+    from fastapi.responses import FileResponse
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    filepath = os.path.join(base_dir, f"annotated_{os.path.basename(video_name)}")
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Annotated video not found")
+    return FileResponse(filepath, media_type="video/mp4")
+
+
 @app.post("/api/simulate")
 def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Trigger the live CV pipeline in the background on a specific video."""

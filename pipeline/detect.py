@@ -211,8 +211,10 @@ def compare_appearance(hist1, hist2):
 
 def camera_transition_prior(previous_camera_id, current_camera_id):
     """Return a soft prior for whether a camera transition is operationally plausible."""
-    if not previous_camera_id or not current_camera_id or previous_camera_id == current_camera_id:
+    if not previous_camera_id or not current_camera_id:
         return 0.0
+    if previous_camera_id == current_camera_id:
+        return 1.0
 
     transition_map = {
         "CAM_ENTRY_01": {
@@ -310,6 +312,7 @@ class CrossCameraSessionTracker:
         box=None,
         frame=None,
         zone_id=None,
+        current_track_ids=None,
     ):
         """Maps a local camera track_id to a globally consistent unified visitor_id using spatial, temporal, and visual cues."""
         track_id = int(track_id)
@@ -363,7 +366,13 @@ class CrossCameraSessionTracker:
 
         for uid, sess in self.sessions.items():
             if sess["last_seen_camera"] == camera_id:
-                continue  # Match across different cameras only
+                # If they are in the same camera, only match if their previous track ID is no longer active in the current frame
+                prev_track_id = sess.get("camera_track_ids", {}).get(camera_id)
+                if prev_track_id is not None and current_track_ids is not None:
+                    if int(prev_track_id) in current_track_ids:
+                        continue  # Still actively tracking this person in the same camera, do not duplicate/hijack!
+                else:
+                    continue  # If we don't have track tracking, keep same camera skipped to avoid overlaps
 
             last_time_str = sess["last_seen_time"]
             try:
@@ -713,6 +722,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                         box=box,
                         frame=frame,
                         zone_id=zone_id,
+                        current_track_ids=set(track_ids),
                     )
                     seen_vids.add(vid)
 
