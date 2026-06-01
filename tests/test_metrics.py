@@ -1,15 +1,16 @@
 # PROMPT: Generate standard Pytest unit tests for a FastAPI store intelligence application. Cover event ingestion idempotency, store metrics (/stores/{id}/metrics), visitor funnel (/stores/{id}/funnel) including entry, zone visits, and purchase drop-offs, and store heatmaps (/stores/{id}/heatmap) under varying test scenarios (empty database, staff events exclusion, and re-entry). Use an in-memory SQLite database.
 # CHANGES MADE: Refactored the database engine to use an in-memory SQLite URL with StaticPool, allowing reliable connection sharing across all test client calls without encountering file-locking or read-only database errors.
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-import uuid
 
+from app.database import DBPOS, Base, DBEvent, get_db
 from app.main import app
-from app.database import Base, get_db, DBEvent, DBPOS
 
 # Setup an in-memory SQLite database with StaticPool for connection persistence
 engine = create_engine(

@@ -1,4 +1,9 @@
 import os
+from datetime import datetime, timedelta
+
+import pytest
+
+from pipeline.detect import CrossCameraSessionTracker, update_staff_status
 import json
 import numpy as np
 from datetime import datetime, timedelta, timezone
@@ -24,6 +29,7 @@ from pipeline.adaptive_models import (
 from app.main import app
 from app.database import SessionLocal, DBEvent, DBPOS, Base, engine
 from app.metrics import get_store_metrics_data
+
 
 @pytest.fixture
 def temp_state_file(tmp_path):

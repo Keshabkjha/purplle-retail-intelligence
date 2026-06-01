@@ -1,13 +1,14 @@
 from sqlalchemy.orm import Session
+
 from app.database import DBEvent
 from app.metrics import parse_timestamp
-import json
+
 
 def get_store_heatmap_data(store_id: str, db: Session):
     # 1. Fetch all customer events
     events = db.query(DBEvent).filter(
         DBEvent.store_id == store_id,
-        DBEvent.is_staff == False,
+        DBEvent.is_staff.is_(False),
         DBEvent.zone_id.isnot(None),
         DBEvent.zone_id != "ENTRY",
         DBEvent.zone_id != "EXIT"
@@ -16,7 +17,7 @@ def get_store_heatmap_data(store_id: str, db: Session):
     # Get total unique sessions to set data_confidence
     unique_sessions = db.query(DBEvent.visitor_id).filter(
         DBEvent.store_id == store_id,
-        DBEvent.is_staff == False
+        DBEvent.is_staff.is_(False)
     ).distinct().count()
 
     data_confidence = unique_sessions >= 20

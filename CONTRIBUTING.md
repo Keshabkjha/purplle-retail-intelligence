@@ -16,11 +16,24 @@ python3 -m venv venv
 source venv/bin/activate
 
 # 3. Install all dependencies
-pip install -r api-requirements.txt
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
-# 4. Run the test suite to confirm everything works
-python3 -m pytest tests/ -v
+# 4. Run quality checks
+ruff check . --fix
+ruff format .
+mypy
+
+# 5. Run the test suite to confirm everything works
+python3 -m pytest
+```
+
+### Updating Dependencies
+
+Edit `requirements.in` / `requirements-dev.in` and regenerate lockfiles:
+
+```bash
+pip-compile requirements.in --output-file=requirements.txt
+pip-compile requirements-dev.in --output-file=requirements-dev.txt
 ```
 
 ---
@@ -81,6 +94,15 @@ fix: correct staff exclusion on EXIT event
 docs: update API reference table in README
 test: add conversion drop anomaly test case
 refactor: extract zone dwell logic into helper
+```
+
+---
+
+## 🧹 Pre-commit Hooks
+
+```bash
+pre-commit install
+pre-commit run --all-files
 ```
 
 ---

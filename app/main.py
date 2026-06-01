@@ -1,41 +1,90 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request
-from fastapi.responses import JSONResponse, HTMLResponse
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import text
-from typing import List, Dict, Any
+import json
+import os
+import sys
 import time
 import uuid
-import sys
-import json
-from datetime import datetime, timedelta, timezone
+from collections import defaultdict, deque
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from threading import Lock
+from typing import Any, Deque, Dict, List, Tuple
 
-from app.models import EventSchema
-from app.database import get_db, init_db, DBEvent
-from app.metrics import get_store_metrics_data, parse_timestamp
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.anomalies import get_store_anomalies_data
+from app.database import DBEvent, get_db, init_db
 from app.funnel import get_store_funnel_data
 from app.heatmap import get_store_heatmap_data
-from app.anomalies import get_store_anomalies_data
+from app.metrics import get_store_metrics_data, parse_timestamp
+from app.models import EventSchema
 
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     yield
 
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(title="Store Intelligence API", lifespan=lifespan)
+
+MAX_INGEST_BATCH = int(os.getenv("MAX_INGEST_BATCH", "500"))
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()] or ["*"]
+
+class RateLimiter:
+    def __init__(self, limit: int, window_seconds: int) -> None:
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self.hits: Dict[str, Deque[float]] = defaultdict(deque)
+        self.lock = Lock()
+
+    def allow(self, key: str) -> Tuple[bool, int]:
+        now = time.time()
+        with self.lock:
+            window = self.hits[key]
+            while window and now - window[0] > self.window_seconds:
+                window.popleft()
+            if len(window) >= self.limit:
+                retry_after = max(1, int(self.window_seconds - (now - window[0])))
+                return False, retry_after
+            window.append(now)
+        return True, 0
+
+app.state.rate_limiter = RateLimiter(RATE_LIMIT_PER_MINUTE, RATE_LIMIT_WINDOW_SECONDS) if RATE_LIMIT_PER_MINUTE > 0 else None
+app.state.max_ingest_batch = MAX_INGEST_BATCH
 
 # Enable CORS for frontend flexibility
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for the hackathon
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Basic rate limiting middleware
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    limiter = request.app.state.rate_limiter
+    if limiter and request.url.path not in ("/health", "/ready", "/live"):
+        forwarded_for = request.headers.get("x-forwarded-for")
+        forwarded_ip = forwarded_for.split(",")[0].strip() if forwarded_for else None
+        client_ip = forwarded_ip or (request.client.host if request.client else "unknown")
+        allowed, retry_after = limiter.allow(client_ip)
+        if not allowed:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded"},
+                headers={"Retry-After": str(retry_after)}
+            )
+    return await call_next(request)
 
 # Structured logging middleware
 @app.middleware("http")
@@ -141,6 +190,14 @@ def health_check(request: Request, db: Session = Depends(get_db)):
         "stores": stores_health
     }
 
+@app.get("/ready")
+def readiness_check(request: Request, db: Session = Depends(get_db)):
+    return health_check(request, db)
+
+@app.get("/live")
+def liveness_check():
+    return {"status": "alive"}
+
 
 @app.post("/events/ingest", status_code=status.HTTP_207_MULTI_STATUS)
 def ingest_events(events: List[Any], request: Request, db: Session = Depends(get_db)):
@@ -158,6 +215,13 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
             "failed": 0,
             "errors": []
         }
+
+    max_batch = request.app.state.max_ingest_batch
+    if max_batch and len(events) > max_batch:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Batch too large. Max supported events per request is {max_batch}."
+        )
 
     # Record wall-clock ingest time in app state to manage real-time stale feed health checks
     request.app.state.last_ingest_time = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -185,11 +249,13 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
 
         try:
             # Check if event already exists to maintain idempotency
-            existing = db.query(DBEvent).filter(DBEvent.event_id == event.event_id).first()
+            event_id_str = str(event.event_id)
+            existing = db.query(DBEvent).filter(DBEvent.event_id == event_id_str).first()
             if existing:
                 success_count += 1
                 continue
 
+            event_timestamp = event.timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             # Validate session_seq monotonicity per visitor
             last_event = db.query(DBEvent).filter(
                 DBEvent.visitor_id == event.visitor_id
@@ -211,12 +277,12 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
                     continue
 
             db_event = DBEvent(
-                event_id=event.event_id,
+                event_id=event_id_str,
                 store_id=event.store_id,
                 camera_id=event.camera_id,
                 visitor_id=event.visitor_id,
-                event_type=event.event_type,
-                timestamp=event.timestamp,
+                event_type=event.event_type.value,
+                timestamp=event_timestamp,
                 zone_id=event.zone_id,
                 dwell_ms=event.dwell_ms,
                 is_staff=event.is_staff,
