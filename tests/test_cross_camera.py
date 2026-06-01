@@ -433,7 +433,7 @@ def test_ingest_batch_size_limit(client):
 def test_ingest_monotonicity(client, db_session):
     # Post first event with session_seq = 2
     evt1 = {
-        "event_id": "evt_mono_1",
+        "event_id": "a1111111-2222-3333-4444-555555555555",
         "store_id": "ST1008",
         "camera_id": "CAM_ENTRY_01",
         "visitor_id": "VIS_MONO",
@@ -445,7 +445,7 @@ def test_ingest_monotonicity(client, db_session):
     
     # Post second event with session_seq = 1 (violates monotonicity)
     evt2 = {
-        "event_id": "evt_mono_2",
+        "event_id": "b1111111-2222-3333-4444-555555555555",
         "store_id": "ST1008",
         "camera_id": "CAM_ENTRY_01",
         "visitor_id": "VIS_MONO",
@@ -509,7 +509,7 @@ def test_reentry_dwell_session_correction(db_session):
 def test_stale_feed_latency(client, db_session):
     # Ingest a clean event to establish the store in DB
     evt = {
-        "event_id": "evt_stale_1",
+        "event_id": "c1111111-2222-3333-4444-555555555555",
         "store_id": "ST1008",
         "camera_id": "CAM_ENTRY_01",
         "visitor_id": "VIS_STALE",

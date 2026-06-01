@@ -93,40 +93,10 @@ def get_store_anomalies_data(store_id: str, db: Session):
             DBEvent.is_staff.is_(False)
         ).order_by(DBEvent.timestamp.desc()).all()
 
+        latest_ts = None
         if all_events:
             latest_ts = parse_timestamp(all_events[0].timestamp)
-            if latest_ts:
-                window_start = latest_ts - timedelta(days=7)
 
-                # Compute 7-day visitor count and POS transaction count
-                week_events = [ev for ev in all_events if parse_timestamp(ev.timestamp) and parse_timestamp(ev.timestamp) >= window_start]
-                week_visitor_ids = {ev.visitor_id for ev in week_events if not ev.is_staff}
-
-                week_pos = db.query(DBPOS).filter(DBPOS.store_id == store_id).all()
-                week_txn_times = [parse_timestamp(tx.timestamp) for tx in week_pos
-                                  if parse_timestamp(tx.timestamp) and parse_timestamp(tx.timestamp) >= window_start]
-
-                week_unique = len(week_visitor_ids)
-                week_txns = len(week_txn_times)
-
-                if week_unique > 10:
-                    baseline_rate = round(100.0 * week_txns / week_unique, 2)
-                    # Trigger WARN if current conversion is > 30% below 7-day baseline
-                    if baseline_rate > 0 and current_conversion < baseline_rate * 0.70:
-                        anomalies.append({
-                            "anomaly_type": "CONVERSION_DROP",
-                            "severity": "WARN",
-                            "suggested_action": "Check for checkout bottlenecks or staff availability. Conversion is significantly below the 7-day baseline.",
-                            "details": f"Current conversion {current_conversion}% is well below the 7-day baseline of {baseline_rate}%."
-                        })
-                elif unique_visitors >= 5 and current_conversion < 10.0:
-                    # Fallback when not enough historical data: static threshold
-                    anomalies.append({
-                        "anomaly_type": "CONVERSION_DROP",
-                        "severity": "WARN",
-                        "suggested_action": "Check for checkout bottlenecks or staff availability.",
-                        "details": f"Conversion rate is low at {current_conversion}% with {unique_visitors} visitors."
-                    })
         baseline_rate = 0.0
         if latest_ts:
             daily_rates = []
