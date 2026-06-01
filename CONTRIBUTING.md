@@ -41,7 +41,7 @@ python3 -m pytest tests/ -v
 
 Before submitting a PR, confirm:
 
-- [ ] All 12 existing tests pass (`python3 -m pytest tests/ -v`)
+- [ ] All 26 tests pass (`python3 -m pytest tests/ -v`)
 - [ ] New features include corresponding unit tests
 - [ ] API changes are reflected in `README.md` endpoint table
 - [ ] New event types are added to the Event Contract table in `README.md`

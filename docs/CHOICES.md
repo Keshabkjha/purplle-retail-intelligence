@@ -68,7 +68,7 @@ A hybrid Redis + PostgreSQL architecture, while robust for high-scale enterprise
 
 ### Options Considered
 1. **Heavy Deep Re-ID Models (e.g. OSNet, FastReID)**: Extracting visual feature vectors for each person using a secondary deep convolutional network and performing cosine similarity matching.
-2. **Multi-Signal Hybrid Re-ID (Visual + Spatiotemporal + Online Learning) (Chosen)**: Extracting lightweight CPU-efficient visual appearance signatures (3D HSV color histograms of the person crop) and combining them with homography-mapped 2D floor coordinates, camera transition priors, zone compatibility priors, time delta constraints, and an online learned identity classifier using a unified scoring function.
+2. **Multi-Signal Hybrid Re-ID (Visual + Spatiotemporal + Supervised/Online Learning) (Chosen)**: Extracting lightweight CPU-efficient visual appearance signatures (3D HSV color histograms of the person crop) and combining them with homography-mapped 2D floor coordinates, camera transition priors, zone compatibility priors, time delta constraints, and a supervised identity model when labeled artifacts are available, with an online learned fallback for cold start using a unified scoring function.
 3. **Pure Spatial-Temporal Proximity (Previous Heuristic)**: Relying strictly on 2D floor coordinates and temporal closeness window constraints without visual verification.
 4. **Naïve Local-Only Tracking**: Treating each camera as a completely isolated feed, resetting IDs when people leave the frame (original baseline).
 
@@ -93,6 +93,6 @@ We chose the **Multi-Signal Hybrid Re-ID** system.
    - Visual Appearance Correlation (26% weight): Histogram correlation of the clothing signature.
    - Camera Transition Prior (12% weight): Rewards plausible inter-camera movement paths.
    - Zone Compatibility Prior (10% weight): Keeps matches aligned with store flow and the last observed zone.
-   - Learned Identity Probability (42% blend): A lightweight online classifier updates from high-confidence pseudo-labels as the store footage is processed.
+   - Learned Identity Probability (42% blend): A supervised model is used when trained artifacts exist; otherwise a lightweight online classifier updates from high-confidence pseudo-labels as the store footage is processed.
    This prevents mismatches when multiple people cross camera boundaries simultaneously and resolves ambiguities under different lighting or angles by maintaining a rolling visual signature.
 3. **Low Footprint**: This requires no bloated weight files or compiled native C extensions, keeping the Docker image light and deployable.

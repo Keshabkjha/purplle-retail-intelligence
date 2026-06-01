@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/keshabkjha/purplle-retail-intelligence/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-24%20passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white"></a>
+  <a href="https://github.com/keshabkjha/purplle-retail-intelligence/actions"><img alt="Tests" src="https://img.shields.io/badge/tests-25%20passed-brightgreen?style=for-the-badge&logo=pytest&logoColor=white"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://fastapi.tiangolo.com"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white"></a>
   <a href="https://docs.ultralytics.com"><img alt="YOLO11" src="https://img.shields.io/badge/YOLO11-Ultralytics-FF6B35?style=for-the-badge&logo=pytorch&logoColor=white"></a>
@@ -88,6 +88,14 @@ purplle-retail-intelligence/
 ├── config/
 │   ├── store_layout.json  # Zone polygon definitions (Brigade Road, Bangalore)
 │   └── calibration.json   # Camera homography transform matrices
+├── data/
+│   └── labels/            # Working annotations for supervised staff / re-ID training
+├── examples/
+│   └── labels/            # Bundled sample JSONL templates
+├── scripts/
+│   ├── bootstrap_supervised_flow.py # One-command copy + train flow
+│   ├── label_helper.py              # Tiny annotation helper
+│   └── train_supervised_models.py    # Offline supervised trainer
 ├── tests/
 │   ├── test_pipeline.py   # Core metric + pipeline logic tests
 │   ├── test_metrics.py    # KPI aggregation coverage
@@ -143,7 +151,7 @@ python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 ### Option C: Run Tests
 
 ```bash
-# Run the full comprehensive test suite (24 tests covering edge cases)
+# Run the full comprehensive test suite (26 tests covering edge cases)
 python3 -m pytest tests/ -v
 
 # Expected output:
@@ -151,8 +159,42 @@ python3 -m pytest tests/ -v
 # tests/test_cross_camera.py::test_transition_priors PASSED
 # tests/test_cross_camera.py::test_reentry_dwell_session_correction PASSED
 # tests/test_anomalies.py::test_conversion_drop_anomaly PASSED
-# ... 24 passed in ~3s ✅
+# ... 26 passed in ~3s ✅
 ```
+
+### Optional: Train Supervised Models
+
+If you have labeled staff crops or pairwise identity annotations, you can train offline models and save them into `pipeline/model_state/`.
+
+```bash
+python3 scripts/train_supervised_models.py \
+  --staff-labels data/labels/staff_labels.jsonl \
+  --reid-pairs data/labels/reid_pairs.jsonl \
+  --output-dir pipeline/model_state
+```
+
+At runtime, `pipeline/detect.py` automatically prefers `staff_supervised.pkl` and `identity_supervised.pkl` when those artifacts exist. If they are missing, the system falls back to the lightweight online models so the demo still works out of the box.
+
+Sample annotation templates live in:
+- `examples/labels/staff_labels.sample.jsonl`
+- `examples/labels/reid_pairs.sample.jsonl`
+
+For quick manual labeling, use:
+```bash
+python3 scripts/label_helper.py --mode staff --output data/labels/staff_labels.jsonl
+python3 scripts/label_helper.py --mode identity --output data/labels/reid_pairs.jsonl
+```
+
+For the fastest reproducible path from a fresh checkout, run one bootstrap command:
+
+```bash
+python3 scripts/bootstrap_supervised_flow.py
+```
+
+That command:
+- creates `data/labels/staff_labels.jsonl` and `data/labels/reid_pairs.jsonl` from the bundled templates if they do not exist
+- trains both supervised models
+- writes `staff_supervised.pkl` and `identity_supervised.pkl` into `pipeline/model_state/`
 
 ---
 
@@ -411,9 +453,10 @@ tests/
 ├── test_pipeline.py     # Entry/exit metrics, staff exclusion, re-entry
 ├── test_metrics.py      # Conversion rate, dwell time, queue depth, validation
 ├── test_anomalies.py    # Queue spike (WARN + CRITICAL), conversion drop, dead zones
-└── test_cross_camera.py # Cross-camera Re-ID, transition priors, batch limit, stale feed, smoke tests
+├── test_cross_camera.py # Cross-camera Re-ID, transition priors, batch limit, stale feed, training round-trip
+└── test_supervised_runtime.py # Supervised artifact load smoke test
 
-Total: 24 tests | Status: ✅ All Passing
+Total: 26 tests | Status: ✅ All Passing
 ```
 
 Run with:

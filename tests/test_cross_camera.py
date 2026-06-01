@@ -12,7 +12,15 @@ from pipeline.detect import (
     camera_transition_prior,
     zone_transition_prior,
 )
-from pipeline.adaptive_models import AdaptiveBinaryModel, build_identity_feature_vector, build_staff_feature_vector
+from pipeline.adaptive_models import (
+    AdaptiveBinaryModel,
+    AdaptiveModelRegistry,
+    StaticBinaryModel,
+    build_identity_feature_vector,
+    build_staff_feature_vector,
+    train_identity_model_from_jsonl,
+    train_staff_model_from_jsonl,
+)
 from app.main import app
 from app.database import SessionLocal, DBEvent, DBPOS, Base, engine
 from app.metrics import get_store_metrics_data
@@ -115,7 +123,14 @@ def test_cross_camera_tracker_no_match_large_gap(temp_state_file):
     assert vid_no_match_time != "VIS_5"
     assert vid_no_match_time == "VIS_6"
 
-def test_hybrid_staff_detection(temp_state_file):
+def test_hybrid_staff_detection(temp_state_file, tmp_path, monkeypatch):
+    import pipeline.detect as detect_module
+
+    monkeypatch.setattr(
+        detect_module,
+        "MODEL_REGISTRY",
+        AdaptiveModelRegistry(base_dir=str(tmp_path / "runtime_state")),
+    )
     tracker = CrossCameraSessionTracker(state_file=temp_state_file)
     t = datetime(2026, 4, 10, 16, 40, 0)
     
@@ -271,6 +286,124 @@ def test_learned_identity_model_separates_examples(tmp_path):
     model.update(mismatched, 0)
 
     assert model.predict_proba(matched, fallback=0.0) > model.predict_proba(mismatched, fallback=0.0)
+
+
+def test_supervised_artifact_training_roundtrip(tmp_path):
+    staff_jsonl = tmp_path / "staff_labels.jsonl"
+    staff_jsonl.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "torso_match_ratio": 0.95,
+                        "is_clothing_staff": True,
+                        "zone_id": "BILLING",
+                        "wx": 860.0,
+                        "billing_duration_sec": 180.0,
+                        "total_duration_sec": 360.0,
+                        "camera_count": 2,
+                        "label": 1,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "torso_match_ratio": 0.05,
+                        "is_clothing_staff": False,
+                        "zone_id": "EB_KOREAN",
+                        "wx": 120.0,
+                        "billing_duration_sec": 0.0,
+                        "total_duration_sec": 35.0,
+                        "camera_count": 1,
+                        "label": 0,
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    reid_jsonl = tmp_path / "reid_labels.jsonl"
+    reid_jsonl.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "spatial_score": 0.95,
+                        "temporal_score": 0.92,
+                        "visual_score": 0.88,
+                        "camera_score": 0.90,
+                        "zone_score": 0.92,
+                        "dist_norm": 0.05,
+                        "time_norm": 0.08,
+                        "label": 1,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "spatial_score": 0.10,
+                        "temporal_score": 0.18,
+                        "visual_score": 0.12,
+                        "camera_score": 0.22,
+                        "zone_score": 0.20,
+                        "dist_norm": 0.88,
+                        "time_norm": 0.90,
+                        "label": 0,
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    train_staff_model_from_jsonl(str(staff_jsonl), str(tmp_path / "staff_supervised.pkl"))
+    train_identity_model_from_jsonl(str(reid_jsonl), str(tmp_path / "identity_supervised.pkl"))
+
+    staff_model = StaticBinaryModel(str(tmp_path / "staff_supervised.pkl"))
+    identity_model = StaticBinaryModel(str(tmp_path / "identity_supervised.pkl"))
+
+    staff_pos = build_staff_feature_vector(
+        torso_match_ratio=0.95,
+        is_clothing_staff=True,
+        zone_id="BILLING",
+        wx=860.0,
+        billing_duration_sec=180.0,
+        total_duration_sec=360.0,
+        camera_count=2,
+    )
+    staff_neg = build_staff_feature_vector(
+        torso_match_ratio=0.05,
+        is_clothing_staff=False,
+        zone_id="EB_KOREAN",
+        wx=120.0,
+        billing_duration_sec=0.0,
+        total_duration_sec=35.0,
+        camera_count=1,
+    )
+    identity_pos = build_identity_feature_vector(
+        spatial_score=0.95,
+        temporal_score=0.92,
+        visual_score=0.88,
+        camera_score=0.90,
+        zone_score=0.92,
+        dist_norm=0.05,
+        time_norm=0.08,
+    )
+    identity_neg = build_identity_feature_vector(
+        spatial_score=0.10,
+        temporal_score=0.18,
+        visual_score=0.12,
+        camera_score=0.22,
+        zone_score=0.20,
+        dist_norm=0.88,
+        time_norm=0.90,
+    )
+
+    assert staff_model.predict_proba(staff_pos, fallback=0.0) > staff_model.predict_proba(staff_neg, fallback=0.0)
+    assert identity_model.predict_proba(identity_pos, fallback=0.0) > identity_model.predict_proba(identity_neg, fallback=0.0)
+
+    registry = AdaptiveModelRegistry(base_dir=str(tmp_path))
+    assert registry.predict_staff_probability(staff_pos, fallback=0.0) > registry.predict_staff_probability(staff_neg, fallback=0.0)
+    assert registry.predict_identity_probability(identity_pos, fallback=0.0) > registry.predict_identity_probability(identity_neg, fallback=0.0)
 
 def test_ingest_batch_size_limit(client):
     # Generating 501 mock events (exceeding cap of 500)

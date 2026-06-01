@@ -397,7 +397,7 @@ class CrossCameraSessionTracker:
                         cam_score * 0.12 +
                         zone_score * 0.10
                     )
-                    learned_prob = MODEL_REGISTRY.identity_model.predict_proba(feature_vec, fallback=heuristic_score)
+                    learned_prob = MODEL_REGISTRY.predict_identity_probability(feature_vec, fallback=heuristic_score)
                     match_score = (
                         0.58 * heuristic_score +
                         0.42 * learned_prob
@@ -510,7 +510,7 @@ def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_st
         total_duration_sec=total_duration,
         camera_count=camera_count,
     )
-    learned_prob = MODEL_REGISTRY.staff_model.predict_proba(feature_vec, fallback=heuristic_prob)
+    learned_prob = MODEL_REGISTRY.predict_staff_probability(feature_vec, fallback=heuristic_prob)
     combined_prob = (0.55 * learned_prob) + (0.45 * heuristic_prob)
 
     # Robust multi-stage confidence resolve with hysteresis.
