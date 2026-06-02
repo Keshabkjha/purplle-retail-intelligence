@@ -76,9 +76,7 @@ kiwisolver==1.5.0
 markupsafe==3.0.3
     # via jinja2
 matplotlib==3.10.9
-    # via
-    #   seaborn
-    #   ultralytics
+    # via ultralytics
 mpmath==1.3.0
     # via sympy
 mypy==1.10.0
@@ -98,8 +96,9 @@ numpy==1.26.4
     #   opencv-python-headless
     #   pandas
     #   scipy
-    #   seaborn
     #   torchvision
+    #   ultralytics
+    #   ultralytics-thop
 nvidia-cublas==13.1.1.3
     # via
     #   nvidia-cudnn-cu13
@@ -152,10 +151,7 @@ packaging==26.2
     #   pytest
     #   wheel
 pandas==2.2.1
-    # via
-    #   -r requirements.in
-    #   seaborn
-    #   ultralytics
+    # via -r requirements.in
 pillow==12.2.0
     # via
     #   matplotlib
@@ -169,14 +165,16 @@ platformdirs==4.10.0
     #   virtualenv
 pluggy==1.6.0
     # via pytest
+polars==1.41.2
+    # via ultralytics
+polars-runtime-32==1.41.2
+    # via polars
 pre-commit==3.7.1
     # via -r requirements-dev.in
 psutil==7.2.2
     # via ultralytics
 psycopg2-binary==2.9.9
     # via -r requirements.in
-py-cpuinfo==9.0.0
-    # via ultralytics
 pydantic==2.6.4
     # via
     #   -r requirements.in
@@ -215,8 +213,6 @@ ruff==0.6.8
     # via -r requirements-dev.in
 scipy==1.17.1
     # via ultralytics
-seaborn==0.13.2
-    # via ultralytics
 six==1.17.0
     # via python-dateutil
 sniffio==1.3.1
@@ -227,16 +223,12 @@ starlette==0.46.2
     # via fastapi
 sympy==1.14.0
     # via torch
-thop==0.1.1.post2209072238
-    # via ultralytics
 torch==2.12.0
     # via
-    #   thop
     #   torchvision
     #   ultralytics
+    #   ultralytics-thop
 torchvision==0.27.0
-    # via ultralytics
-tqdm==4.67.3
     # via ultralytics
 triton==3.7.0
     # via torch
@@ -253,8 +245,10 @@ typing-extensions==4.15.0
     #   torch
 tzdata==2026.2
     # via pandas
-ultralytics==8.1.29
+ultralytics==8.4.60
     # via -r requirements.in
+ultralytics-thop==2.0.19
+    # via ultralytics
 urllib3==2.7.0
     # via
     #   requests
@@ -269,4 +263,3 @@ wheel==0.47.0
 # The following packages are considered to be unsafe in a requirements file:
 # pip
 # setuptools
-scikit-learn==1.4.1.post1
