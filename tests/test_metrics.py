@@ -351,3 +351,61 @@ def test_refined_store_metrics_and_funnel(client, db_session):
     assert res_metrics_cam.status_code == 200
     metrics_cam = res_metrics_cam.json()
     assert metrics_cam["unique_visitors"] == 2
+
+
+def test_comprehensive_funnel_scenarios(client, db_session):
+    store_id = "ST1008"
+
+    # Test 1: Empty database funnel
+    res_empty = client.get(f"/stores/{store_id}/funnel")
+    assert res_empty.status_code == 200
+    assert res_empty.json()["funnel"]["entry"] == 0
+
+    # Add visitor 1 (complete converted journey)
+    db_session.add(DBEvent(
+        event_id="e201", store_id=store_id, camera_id="CAM_ENTRY_01", visitor_id="VIS_CONVERT",
+        event_type="ENTRY", timestamp="2026-04-10T16:40:00Z", zone_id="ENTRY", is_staff=False, confidence=0.9,
+        metadata_json={"session_seq": 1}
+    ))
+    db_session.add(DBEvent(
+        event_id="e202", store_id=store_id, camera_id="CAM_MAIN_01", visitor_id="VIS_CONVERT",
+        event_type="ZONE_ENTER", timestamp="2026-04-10T16:41:00Z", zone_id="EB_KOREAN", is_staff=False, confidence=0.9,
+        metadata_json={"session_seq": 2}
+    ))
+    db_session.add(DBEvent(
+        event_id="e203", store_id=store_id, camera_id="CAM_BILLING_01", visitor_id="VIS_CONVERT",
+        event_type="BILLING_QUEUE_JOIN", timestamp="2026-04-10T16:45:00Z", zone_id="BILLING", is_staff=False, confidence=0.9,
+        metadata_json={"session_seq": 3}
+    ))
+
+    # Add POS transaction matching the billing queue join (within 5 minutes)
+    db_session.add(DBPOS(
+        order_id="TX_100", store_id=store_id, timestamp="2026-04-10T16:47:00Z", brand_name="EB_KOREAN", total_amount=1500.0
+    ))
+    
+    # Add POS transaction with invalid/unparseable timestamp to test parsing fallback logic in funnel
+    db_session.add(DBPOS(
+        order_id="TX_BAD", store_id=store_id, timestamp="BAD_TIME_FORMAT", brand_name="EB_KOREAN", total_amount=100.0
+    ))
+
+    db_session.commit()
+
+    # Test 2: Store-wide funnel with conversion
+    res_funnel = client.get(f"/stores/{store_id}/funnel")
+    assert res_funnel.status_code == 200
+    funnel = res_funnel.json()
+    assert funnel["funnel"]["entry"] == 1
+    assert funnel["funnel"]["zone_visit"] == 1
+    assert funnel["funnel"]["billing_queue"] == 1
+    assert funnel["funnel"]["purchase"] == 1
+    assert funnel["dropoff_percentages"]["entry_to_zone"] == 0.0
+    assert funnel["dropoff_percentages"]["zone_to_billing"] == 0.0
+    assert funnel["dropoff_percentages"]["billing_to_purchase"] == 0.0
+
+    # Test 3: Camera-filtered funnel (camera_id=CAM_MAIN_01)
+    res_funnel_cam = client.get(f"/stores/{store_id}/funnel?camera_id=CAM_MAIN_01")
+    assert res_funnel_cam.status_code == 200
+    funnel_cam = res_funnel_cam.json()
+    assert funnel_cam["funnel"]["entry"] == 1
+    assert funnel_cam["funnel"]["purchase"] == 1
+
