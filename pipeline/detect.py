@@ -637,12 +637,18 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 1080
     print(f"Processing {video_path} ({camera_id}) | FPS: {fps} | Total Frames: {frame_count}")
 
+    # Target resolution for fast in-memory downscaling
+    target_w = 640
+    target_h = int(height * (target_w / width))
+    scale_x = width / target_w
+    scale_y = height / target_h
+
     # Setup VideoWriter
     out_path = f"annotated_{base_name}"
     temp_out_path = f"temp_annotated_{base_name}"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(temp_out_path, fourcc, fps, (width, height))
-    print(f"Annotated temporary output will be saved to: {temp_out_path}")
+    out = cv2.VideoWriter(temp_out_path, fourcc, fps, (target_w, target_h))
+    print(f"Annotated temporary output will be saved to: {temp_out_path} ({target_w}x{target_h})")
 
     # Reset/clear cross-camera tracking state on entry camera run
     state_file = "pipeline/session_state.json"
@@ -672,6 +678,9 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
         ret, frame = cap.read()
         if not ret:
             break
+
+        # In-memory resolution downscaling for fast inference
+        frame = cv2.resize(frame, (target_w, target_h))
 
         frame_num += 1
 
@@ -708,7 +717,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                     py = y2  # foot position is bottom center
 
                     # Map to floor plan
-                    wx, wy = map_camera_to_floor(px, py, camera_id, width, height)
+                    wx, wy = map_camera_to_floor(px * scale_x, py * scale_y, camera_id, width, height)
                     zone_id = determine_zone(wx, wy, camera_id)
                     is_staff_init = is_staff_heuristic(track_id, box, frame)
 
