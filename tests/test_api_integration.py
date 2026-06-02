@@ -1,10 +1,15 @@
+import io
+import json
 import uuid
+from unittest.mock import patch
 
 import pytest
+from fastapi.responses import Response
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
 
 from app.database import Base, get_db
 from app.main import RateLimiter, app
@@ -122,3 +127,107 @@ def test_pipeline_post_event_payload(monkeypatch):
 
     assert captured["url"].endswith("/events/ingest")
     assert captured["payload"] == [event]
+
+
+def test_list_videos(client):
+    with patch("os.path.exists", return_value=True), \
+         patch("glob.glob", return_value=["CCTV Footage/video1.mp4", "CCTV Footage/video2.mp4"]):
+        response = client.get("/api/videos")
+        assert response.status_code == 200
+        assert response.json() == {"videos": ["video1.mp4", "video2.mp4"]}
+
+
+def test_check_annotated_exists(client):
+    with patch("os.path.exists") as mock_exists:
+        mock_exists.side_effect = lambda path: "annotated_dummy.mp4" in path
+        response = client.get("/api/annotated_exists/dummy.mp4")
+        assert response.status_code == 200
+        assert response.json()["exists"] is True
+
+
+def test_stream_annotated_video_404(client):
+    with patch("os.path.exists", return_value=False):
+        response = client.get("/api/annotated_stream/dummy.mp4")
+        assert response.status_code == 404
+
+
+def test_stream_annotated_video_200(client):
+    with patch("os.path.exists", return_value=True), \
+         patch("fastapi.responses.FileResponse", return_value=Response(content=b"dummy video data", media_type="video/mp4")):
+        response = client.get("/api/annotated_stream/dummy.mp4")
+        assert response.status_code == 200
+        assert response.content == b"dummy video data"
+
+
+def test_stream_video_range(client):
+    import io
+    dummy_file = io.BytesIO(b"dummy video data 0123456789")
+    with patch("os.path.exists", return_value=True), \
+         patch("os.path.getsize", return_value=27), \
+         patch("builtins.open", return_value=dummy_file):
+        response = client.get("/api/video_stream/dummy.mp4", headers={"range": "bytes=0-9"})
+        assert response.status_code == 206
+        assert response.headers["Content-Range"] == "bytes 0-9/27"
+        assert response.read() == b"dummy vide"
+
+
+def test_get_dashboard(client):
+    import io
+    with patch("os.path.exists", return_value=True), \
+         patch("builtins.open", return_value=io.StringIO("<html>dashboard</html>")):
+        response = client.get("/dashboard")
+        assert response.status_code == 200
+        assert "dashboard" in response.text
+
+    with patch("os.path.exists", return_value=False):
+        response = client.get("/dashboard")
+        assert response.status_code == 404
+
+
+def test_get_simulation_status(client):
+    import io
+    import json
+    # Idle case
+    with patch("os.path.exists", return_value=False):
+        response = client.get("/api/simulation_status")
+        assert response.status_code == 200
+        assert response.json()["status"] == "idle"
+
+    # Running case
+    progress_data = {"status": "running", "percent": 50, "video": "dummy.mp4"}
+    mock_file = io.StringIO(json.dumps(progress_data))
+    with patch("os.path.exists", return_value=True), \
+         patch("builtins.open", return_value=mock_file):
+        response = client.get("/api/simulation_status")
+        assert response.status_code == 200
+        assert response.json()["status"] == "running"
+        assert response.json()["percent"] == 50
+
+
+def test_run_simulation_cache(client):
+    payload = {"video": "entry_camera.mp4", "force": False}
+    with patch("app.main.Session.query") as mock_query, \
+         patch("builtins.open", return_value=io.StringIO()):
+        
+        # Mock count and distinct count
+        mock_query.return_value.filter.return_value.count.return_value = 5
+        mock_query.return_value.filter.return_value.distinct.return_value.count.return_value = 2
+        
+        response = client.post("/api/simulate", json=payload)
+        assert response.status_code == 200
+        assert response.json()["status"] == "already_processed"
+        assert response.json()["event_count"] == 5
+        assert response.json()["visitor_count"] == 2
+
+
+def test_run_simulation_force(client):
+    payload = {"video": "entry_camera.mp4", "force": True}
+    with patch("app.main.Session.query") as mock_query, \
+         patch("builtins.open", return_value=io.StringIO()), \
+         patch("subprocess.run") as mock_sub:
+        
+        # Trigger background task immediately in test environment
+        response = client.post("/api/simulate", json=payload)
+        assert response.status_code == 200
+        assert response.json()["status"] == "Simulation started in background."
+
