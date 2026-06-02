@@ -6,6 +6,6 @@ psycopg2-binary==2.9.9
 ultralytics==8.4.59
 opencv-python-headless==4.9.0.80
 requests==2.31.0
-pandas==2.2.1
+pandas==3.0.3
 numpy==1.26.4
 httpx==0.27.2
