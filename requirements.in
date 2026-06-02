@@ -2,7 +2,7 @@ fastapi==0.115.11
 uvicorn==0.34.0
 pydantic==2.6.4
 sqlalchemy==2.0.38
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 ultralytics==8.4.59
 opencv-python-headless==4.9.0.80
 requests==2.31.0
