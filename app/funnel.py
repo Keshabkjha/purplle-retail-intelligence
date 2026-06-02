@@ -8,16 +8,12 @@ from app.metrics import parse_timestamp
 
 
 def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] = None):
-    # 1. Fetch all customer events
-    query = db.query(DBEvent).filter(
+    # 1. Fetch all customer events for the store (no camera filter initially to construct sessions)
+    all_events = db.query(DBEvent).filter(
         DBEvent.store_id == store_id, DBEvent.is_staff.is_(False)
-    )
-    if camera_id:
-        query = query.filter(DBEvent.camera_id == camera_id)
+    ).order_by(DBEvent.timestamp).all()
 
-    events = query.order_by(DBEvent.timestamp).all()
-
-    if not events:
+    if not all_events:
         return {
             "store_id": store_id,
             "camera_id": camera_id,
@@ -29,8 +25,9 @@ def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] =
             },
         }
 
+    # Group all events by visitor_id to trace shopper session journeys
     sessions = {}
-    for ev in events:
+    for ev in all_events:
         vid = ev.visitor_id
         if vid not in sessions:
             sessions[vid] = []
@@ -44,12 +41,30 @@ def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] =
         if dt:
             txn_times.append(dt)
 
+    # Determine the set of visitor IDs who entered the store via Entry Camera (CAM_ENTRY_01)
+    entry_vids = {
+        ev.visitor_id for ev in all_events if ev.camera_id == "CAM_ENTRY_01"
+    }
+    # Fallback to all visitor IDs if no entry camera events are found yet
+    if not entry_vids:
+        entry_vids = set(sessions.keys())
+
+    # If camera_id is specified, filter to visitors who visited this camera AND entered the store
+    if camera_id:
+        camera_vids = {
+            ev.visitor_id for ev in all_events if ev.camera_id == camera_id
+        }
+        active_vids = entry_vids.intersection(camera_vids)
+    else:
+        active_vids = entry_vids
+
     entry_count = 0
     zone_visit_count = 0
     billing_queue_count = 0
     purchase_count = 0
 
-    for vid, ev_list in sessions.items():
+    for vid in active_vids:
+        ev_list = sessions[vid]
         entry_count += 1
 
         has_visited_retail = False

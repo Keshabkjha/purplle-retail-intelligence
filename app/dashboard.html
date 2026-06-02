@@ -249,12 +249,12 @@
             <!-- Unique Visitors -->
             <div class="glass-panel rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between relative group">
                 <div class="flex justify-between items-start">
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Unique Visitors</span>
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider" id="kpi-visitors-title">Unique Visitors</span>
                     <span class="p-2 rounded-lg bg-indigo-500/10 text-primary"><i data-lucide="users" class="w-4 h-4"></i></span>
                 </div>
                 <div class="mt-4">
                     <div class="text-4xl font-extrabold text-white tracking-tight kpi-animate inline-block" id="kpi-visitors">-</div>
-                    <p class="text-xs text-slate-400 font-medium mt-1">Real-time unique sessions</p>
+                    <p class="text-xs text-slate-400 font-medium mt-1" id="kpi-visitors-desc">Real-time unique sessions</p>
                 </div>
             </div>
 
@@ -1196,6 +1196,17 @@
                 const metricsRes = await fetch(`/stores/${storeId}/metrics?${camParam()}`);
                 const metrics = await metricsRes.json();
                 
+                // Update KPI Title and Description depending on Camera Mode
+                const kpiTitle = document.getElementById('kpi-visitors-title');
+                const kpiDesc = document.getElementById('kpi-visitors-desc');
+                if (activeCameraId) {
+                    kpiTitle.textContent = "Camera Traffic";
+                    kpiDesc.textContent = "Unique visitors seen on camera";
+                } else {
+                    kpiTitle.textContent = "Unique Store Visitors";
+                    kpiDesc.textContent = "Total unique visitors entered";
+                }
+
                 // Update with bounce micro-animations
                 updateKpiWithAnimation('kpi-visitors', metrics.unique_visitors);
                 updateKpiWithAnimation('kpi-conversion', `${metrics.conversion_rate}%`);

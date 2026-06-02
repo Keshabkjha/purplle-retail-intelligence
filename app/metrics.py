@@ -18,14 +18,34 @@ def parse_timestamp(ts_str):
 
 
 def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] = None):
-    # 1. Fetch all events for the store that are not staff
-    query = db.query(DBEvent).filter(
-        DBEvent.store_id == store_id, DBEvent.is_staff.is_(False)
+    # Calculate total store visitors based on Entry Camera (CAM_ENTRY_01)
+    total_store_visitors = (
+        db.query(DBEvent.visitor_id)
+        .filter(
+            DBEvent.store_id == store_id,
+            DBEvent.camera_id == "CAM_ENTRY_01",
+            DBEvent.is_staff.is_(False)
+        )
+        .distinct()
+        .count()
     )
-    if camera_id:
-        query = query.filter(DBEvent.camera_id == camera_id)
 
-    events = query.order_by(DBEvent.timestamp).all()
+    # Fallback to all unique store visitors if entry camera hasn't been run yet
+    if total_store_visitors == 0:
+        total_store_visitors = (
+            db.query(DBEvent.visitor_id)
+            .filter(
+                DBEvent.store_id == store_id,
+                DBEvent.is_staff.is_(False)
+            )
+            .distinct()
+            .count()
+        )
+
+    # Fetch all events for the store that are not staff
+    events = db.query(DBEvent).filter(
+        DBEvent.store_id == store_id, DBEvent.is_staff.is_(False)
+    ).order_by(DBEvent.timestamp).all()
 
     if not events:
         return {
@@ -38,7 +58,7 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
             "abandonment_rate": 0.0,
         }
 
-    # Group events by visitor_id
+    # Group all events by visitor_id to build complete store session history
     sessions = {}
     for ev in events:
         vid = ev.visitor_id
@@ -46,7 +66,16 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
             sessions[vid] = []
         sessions[vid].append(ev)
 
-    unique_visitors = len(sessions)
+    # If camera_id is specified, filter active sessions to visitors who visited this specific camera
+    if camera_id:
+        active_sessions = {
+            vid: ev_list for vid, ev_list in sessions.items()
+            if any(ev.camera_id == camera_id for ev in ev_list)
+        }
+        unique_visitors = len(active_sessions)
+    else:
+        active_sessions = sessions
+        unique_visitors = total_store_visitors
 
     # 2. Fetch POS transactions
     pos_txns = db.query(DBPOS).filter(DBPOS.store_id == store_id).all()
@@ -61,24 +90,28 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
     total_dwell_seconds = 0.0
     billing_visitor_ids = set()
 
-    for vid, ev_list in sessions.items():
-        visits = []
-        current_visit = []
-        for ev in ev_list:
-            if ev.event_type in ("ENTRY", "REENTRY") and current_visit:
+    for vid, ev_list in active_sessions.items():
+        # Dwell time is calculated strictly based on events from the selected camera (or all events if camera_id is None)
+        cam_events = [ev for ev in ev_list if ev.camera_id == camera_id] if camera_id else ev_list
+        if cam_events:
+            visits = []
+            current_visit = []
+            for ev in cam_events:
+                if ev.event_type in ("ENTRY", "REENTRY") and current_visit:
+                    visits.append(current_visit)
+                    current_visit = []
+                current_visit.append(ev)
+            if current_visit:
                 visits.append(current_visit)
-                current_visit = []
-            current_visit.append(ev)
-        if current_visit:
-            visits.append(current_visit)
 
-        for visit in visits:
-            first_time = parse_timestamp(visit[0].timestamp)
-            last_time = parse_timestamp(visit[-1].timestamp)
-            if first_time and last_time:
-                dwell_sec = (last_time - first_time).total_seconds()
-                total_dwell_seconds += max(dwell_sec, 0.0)
+            for visit in visits:
+                first_time = parse_timestamp(visit[0].timestamp)
+                last_time = parse_timestamp(visit[-1].timestamp)
+                if first_time and last_time:
+                    dwell_sec = (last_time - first_time).total_seconds()
+                    total_dwell_seconds += max(dwell_sec, 0.0)
 
+        # Conversion checks use the shopper's full store session history
         billing_visits = []
         for ev in ev_list:
             if ev.zone_id == "BILLING" or ev.event_type in (
@@ -103,8 +136,8 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
             converted_visitors.add(vid)
 
     conversion_rate = 0.0
-    if unique_visitors > 0:
-        conversion_rate = round(100.0 * len(converted_visitors) / unique_visitors, 2)
+    if total_store_visitors > 0:
+        conversion_rate = round(100.0 * len(converted_visitors) / total_store_visitors, 2)
 
     avg_dwell_minutes = 0.0
     if unique_visitors > 0:
