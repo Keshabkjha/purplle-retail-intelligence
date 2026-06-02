@@ -298,3 +298,56 @@ def test_partial_ingestion_malformed_event(client):
     assert len(data["errors"]) == 1
     assert data["errors"][0]["event_id"] == "malformed_id"
     assert "Schema validation failed" in data["errors"][0]["error"]
+
+
+def test_refined_store_metrics_and_funnel(client, db_session):
+    store_id = "ST1008"
+
+    # Add visitor 1 (enters via CAM_ENTRY_01 and visits CAM_MAIN_01)
+    db_session.add(DBEvent(
+        event_id="e101", store_id=store_id, camera_id="CAM_ENTRY_01", visitor_id="VIS_A",
+        event_type="ENTRY", timestamp="2026-04-10T12:00:00Z", zone_id="ENTRY", is_staff=False, confidence=0.9,
+        metadata_json={"session_seq": 1}
+    ))
+    db_session.add(DBEvent(
+        event_id="e102", store_id=store_id, camera_id="CAM_MAIN_01", visitor_id="VIS_A",
+        event_type="ZONE_ENTER", timestamp="2026-04-10T12:02:00Z", zone_id="EB_KOREAN", is_staff=False, confidence=0.9,
+        metadata_json={"session_seq": 2}
+    ))
+
+    # Add visitor 2 (only entered via CAM_ENTRY_01, didn't go to retail zone)
+    db_session.add(DBEvent(
+        event_id="e103", store_id=store_id, camera_id="CAM_ENTRY_01", visitor_id="VIS_B",
+        event_type="ENTRY", timestamp="2026-04-10T12:05:00Z", zone_id="ENTRY", is_staff=False, confidence=0.9,
+        metadata_json={"session_seq": 1}
+    ))
+
+    # Add visitor 3 (only seen on CAM_MAIN_01, never seen on entry camera)
+    db_session.add(DBEvent(
+        event_id="e104", store_id=store_id, camera_id="CAM_MAIN_01", visitor_id="VIS_C",
+        event_type="ZONE_ENTER", timestamp="2026-04-10T12:06:00Z", zone_id="EB_KOREAN", is_staff=False, confidence=0.9,
+        metadata_json={"session_seq": 1}
+    ))
+
+    db_session.commit()
+
+    # 1. Store-wide verification (camera_id=None)
+    # Total store visitors must be 2 (VIS_A and VIS_B, who entered via entry camera).
+    # Visitor C did not enter via CAM_ENTRY_01, so they are excluded from total store visitors.
+    res_metrics = client.get(f"/stores/{store_id}/metrics")
+    assert res_metrics.status_code == 200
+    metrics = res_metrics.json()
+    assert metrics["unique_visitors"] == 2
+
+    # Funnel store-wide entry count should also be 2
+    res_funnel = client.get(f"/stores/{store_id}/funnel")
+    assert res_funnel.status_code == 200
+    funnel = res_funnel.json()
+    assert funnel["funnel"]["entry"] == 2
+
+    # 2. Camera-filtered verification (camera_id=CAM_MAIN_01)
+    # The traffic for Main Floor 1 is 2 unique visitors (VIS_A and VIS_C).
+    res_metrics_cam = client.get(f"/stores/{store_id}/metrics?camera_id=CAM_MAIN_01")
+    assert res_metrics_cam.status_code == 200
+    metrics_cam = res_metrics_cam.json()
+    assert metrics_cam["unique_visitors"] == 2

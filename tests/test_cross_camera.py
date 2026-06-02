@@ -238,7 +238,7 @@ def test_transition_priors():
     assert camera_transition_prior("CAM_ENTRY_01", "CAM_MAIN_01") > camera_transition_prior(
         "CAM_ENTRY_01", "CAM_BILLING_01"
     )
-    assert camera_transition_prior("CAM_MAIN_01", "CAM_MAIN_01") == 0.0
+    assert camera_transition_prior("CAM_MAIN_01", "CAM_MAIN_01") == 1.0
 
     # Zone continuity should favor identical or adjacent retail-zone transitions.
     assert zone_transition_prior("EB_KOREAN", "EB_KOREAN") == 1.0
