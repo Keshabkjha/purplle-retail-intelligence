@@ -643,12 +643,16 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
     scale_x = width / target_w
     scale_y = height / target_h
 
+    # Frame skipping configuration to optimize CPU processing speed
+    frame_skip = 3
+    out_fps = fps / frame_skip
+
     # Setup VideoWriter
     out_path = f"annotated_{base_name}"
     temp_out_path = f"temp_annotated_{base_name}"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(temp_out_path, fourcc, fps, (target_w, target_h))
-    print(f"Annotated temporary output will be saved to: {temp_out_path} ({target_w}x{target_h})")
+    out = cv2.VideoWriter(temp_out_path, fourcc, out_fps, (target_w, target_h))
+    print(f"Annotated temporary output will be saved to: {temp_out_path} ({target_w}x{target_h}) at {out_fps:.2f} FPS")
 
     # Reset/clear cross-camera tracking state on entry camera run
     state_file = "pipeline/session_state.json"
@@ -679,26 +683,36 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
         if not ret:
             break
 
-        # In-memory resolution downscaling for fast inference
-        frame = cv2.resize(frame, (target_w, target_h))
-
         frame_num += 1
 
-        # Calculate current frame timestamp
-        offset_seconds = frame_num / fps
-        current_time = base_time + timedelta(seconds=offset_seconds)
-        ts_str = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        
-        # Write progress every 5 frames
+        # Write progress status (e.g. running) to pipeline/simulation_progress.json
         if frame_num % 5 == 0 or frame_num == frame_count:
             try:
                 with open("pipeline/simulation_progress.json", "w") as f:
-                    json.dict_dump = {"video": base_name, "frame": frame_num, "total": frame_count, "percent": int((frame_num/frame_count)*100)}
-                    json.dump(json.dict_dump, f)
+                    progress_data = {
+                        "video": base_name,
+                        "frame": frame_num,
+                        "total": frame_count if frame_count > 0 else frame_num,
+                        "percent": int((frame_num / frame_count) * 100) if frame_count > 0 else 0,
+                        "status": "running"
+                    }
+                    json.dump(progress_data, f)
             except Exception:
                 pass
 
-        # Run YOLO tracking every frame for smooth video
+        # Skip frames to cut down computing load (1 out of every 3 frames is processed)
+        if frame_num % frame_skip != 0:
+            continue
+
+        # In-memory resolution downscaling for fast inference
+        frame = cv2.resize(frame, (target_w, target_h))
+
+        # Calculate current frame timestamp based on original frame count timeline
+        offset_seconds = frame_num / fps
+        current_time = base_time + timedelta(seconds=offset_seconds)
+        ts_str = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Run YOLO tracking on processed frames
         results = model.track(frame, persist=True, verbose=False)
 
         seen_tracks = set()
@@ -1020,6 +1034,20 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                 except Exception:
                     pass
             os.rename(temp_out_path, out_path)
+
+    # Write final done status to simulation_progress.json
+    try:
+        with open("pipeline/simulation_progress.json", "w") as f:
+            json.dump({
+                "video": base_name,
+                "frame": frame_count if frame_count > 0 else frame_num,
+                "total": frame_count if frame_count > 0 else frame_num,
+                "percent": 100,
+                "status": "done"
+            }, f)
+        print("Simulation progress marked as done.")
+    except Exception as e:
+        print(f"Failed to write final progress JSON: {e}")
 
 
 if __name__ == "__main__":
