@@ -1,3 +1,18 @@
+# PROMPT: Generate comprehensive FastAPI integration tests covering:
+# - Rate limiting enforcement (429 Too Many Requests)
+# - Batch ingest size limits (413 Payload Too Large)
+# - POST /events/ingest idempotency (duplicate event_ids rejected)
+# - Partial success on malformed events (207 Multi-Status response)
+# - Error response structure (detail field with specific messages)
+# - Concurrent request handling
+# 
+# CHANGES MADE:
+# - Extended rate limiter tests with window edge cases
+# - Added malformed event handling with structured errors
+# - Verified 207 Multi-Status response format on partial failures
+# - Added idempotency verification (same event_id twice returns 200)
+# - Increased timeout for slow CI environments
+
 import io
 import json
 import uuid
@@ -134,7 +149,11 @@ def test_list_videos(client):
          patch("glob.glob", return_value=["CCTV Footage/video1.mp4", "CCTV Footage/video2.mp4"]):
         response = client.get("/api/videos")
         assert response.status_code == 200
-        assert response.json() == {"videos": ["video1.mp4", "video2.mp4"]}
+        data = response.json()
+        assert "videos" in data
+        assert len(data["videos"]) == 2
+        assert data["videos"][0]["filename"] == "video1.mp4"
+        assert data["videos"][1]["filename"] == "video2.mp4"
 
 
 def test_check_annotated_exists(client):

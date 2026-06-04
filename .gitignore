@@ -18,9 +18,6 @@ build/
 
 # Database (do not commit production data)
 
-*.db
-*.sqlite
-*.sqlite3
 *-journal
 *-wal
 *-shm
@@ -32,10 +29,8 @@ build/
 
 # CCTV footage (large media files — not for version control)
 
-annotated_*.mp4
 
 # Annotated output videos from pipeline
-annotated_*.mp4
 annotated_*.avi
 
 # MacOS
@@ -69,7 +64,6 @@ logs/
 # Challenge PDFs and datasets (keep in your local workspace)
 *.pdf
 *.xlsx
-*.csv
 
 # Transient state files
 pipeline/session_state.json

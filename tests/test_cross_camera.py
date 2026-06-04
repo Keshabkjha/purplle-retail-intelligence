@@ -64,11 +64,11 @@ def test_cross_camera_tracker_new_session(temp_state_file):
         is_staff_initial=False,
     )
 
-    assert vid == "VIS_1"
-    assert "VIS_1" in tracker.sessions
-    assert tracker.sessions["VIS_1"]["last_seen_camera"] == "CAM_ENTRY_01"
-    assert tracker.sessions["VIS_1"]["last_seen_x"] == 10.0
-    assert tracker.sessions["VIS_1"]["last_seen_y"] == 250.0
+    assert vid == "ID_60001"
+    assert "ID_60001" in tracker.sessions
+    assert tracker.sessions["ID_60001"]["last_seen_camera"] == "CAM_ENTRY_01"
+    assert tracker.sessions["ID_60001"]["last_seen_x"] == 10.0
+    assert tracker.sessions["ID_60001"]["last_seen_y"] == 250.0
 
 
 def test_cross_camera_tracker_spatial_temporal_match(temp_state_file):
@@ -96,11 +96,11 @@ def test_cross_camera_tracker_spatial_temporal_match(temp_state_file):
         is_staff_initial=False,
     )
 
-    assert vid_match == "VIS_3"  # Should correctly unify to the original VIS_3!
-    assert tracker.sessions["VIS_3"]["last_seen_camera"] == "CAM_MAIN_01"
-    assert tracker.sessions["VIS_3"]["camera_track_ids"]["CAM_ENTRY_01"] == 3
-    assert tracker.sessions["VIS_3"]["camera_track_ids"]["CAM_MAIN_01"] == 2
-    assert tracker.is_reentry("VIS_3", "CAM_MAIN_01") is True
+    assert vid_match == "ID_60003"  # Should correctly unify to the original VIS_3!
+    assert tracker.sessions["ID_60003"]["last_seen_camera"] == "CAM_MAIN_01"
+    assert tracker.sessions["ID_60003"]["camera_track_ids"]["CAM_ENTRY_01"] == 3
+    assert tracker.sessions["ID_60003"]["camera_track_ids"]["CAM_MAIN_01"] == 2
+    assert tracker.is_reentry("ID_60003", "CAM_MAIN_01") is True
 
 
 def test_cross_camera_tracker_no_match_large_gap(temp_state_file):
@@ -128,8 +128,8 @@ def test_cross_camera_tracker_no_match_large_gap(temp_state_file):
         is_staff_initial=False,
     )
 
-    assert vid_no_match_time != "VIS_5"
-    assert vid_no_match_time == "VIS_6"
+    assert vid_no_match_time != "ID_60005"
+    assert vid_no_match_time == "ID_60006"
 
 
 def test_hybrid_staff_detection(temp_state_file, tmp_path, monkeypatch):
@@ -152,7 +152,7 @@ def test_hybrid_staff_detection(temp_state_file, tmp_path, monkeypatch):
         "seq": 1,
         "is_staff": False,
     }
-    vid = "VIS_99"
+    vid = "ID_600099"
     tracker.sessions[vid] = {
         "unified_id": vid,
         "last_seen_camera": "CAM_ENTRY_01",
@@ -230,13 +230,13 @@ def test_appearance_based_matching(temp_state_file):
         box=[0, 0, 100, 100],
         frame=frame_red,
     )
-    assert vid_match == "VIS_1"
+    assert vid_match == "ID_60001"
 
 
 def test_transition_priors():
-    # Entry to main floor is a plausible transition, same camera should not score.
-    assert camera_transition_prior("CAM_ENTRY_01", "CAM_MAIN_01") > camera_transition_prior(
-        "CAM_ENTRY_01", "CAM_BILLING_01"
+    # Should yield higher score for an adjacent layout transition
+    assert camera_transition_prior("cam1", "CAM1") > camera_transition_prior(
+        "cam1", "CAM5"
     )
     assert camera_transition_prior("CAM_MAIN_01", "CAM_MAIN_01") == 1.0
 
@@ -438,7 +438,7 @@ def test_ingest_batch_size_limit(client):
                 "event_id": f"evt_{i}",
                 "store_id": "ST1008",
                 "camera_id": "CAM_ENTRY_01",
-                "visitor_id": "VIS_1",
+                "visitor_id": "ID_60001",
                 "event_type": "ENTRY",
                 "timestamp": "2026-04-10T16:40:00Z",
                 "confidence": 0.95,
@@ -457,7 +457,7 @@ def test_ingest_monotonicity(client, db_session):
         "event_id": "a1111111-2222-3333-4444-555555555555",
         "store_id": "ST1008",
         "camera_id": "CAM_ENTRY_01",
-        "visitor_id": "VIS_MONO",
+        "visitor_id": "ID_6000MONO",
         "event_type": "ENTRY",
         "timestamp": "2026-04-10T16:40:00Z",
         "confidence": 0.95,
@@ -469,7 +469,7 @@ def test_ingest_monotonicity(client, db_session):
         "event_id": "b1111111-2222-3333-4444-555555555555",
         "store_id": "ST1008",
         "camera_id": "CAM_ENTRY_01",
-        "visitor_id": "VIS_MONO",
+        "visitor_id": "ID_6000MONO",
         "event_type": "ZONE_ENTER",
         "zone_id": "EB_KOREAN",
         "timestamp": "2026-04-10T16:40:10Z",
@@ -497,7 +497,7 @@ def test_reentry_dwell_session_correction(db_session):
             event_id="e1",
             store_id="ST1008",
             camera_id="CAM_ENTRY_01",
-            visitor_id="VIS_RE",
+            visitor_id="ID_6000RE",
             event_type="ENTRY",
             timestamp="2026-04-10T16:40:00Z",
             zone_id="ENTRY",
@@ -508,7 +508,7 @@ def test_reentry_dwell_session_correction(db_session):
             event_id="e2",
             store_id="ST1008",
             camera_id="CAM_ENTRY_01",
-            visitor_id="VIS_RE",
+            visitor_id="ID_6000RE",
             event_type="EXIT",
             timestamp="2026-04-10T16:40:30Z",
             zone_id="ENTRY",
@@ -519,7 +519,7 @@ def test_reentry_dwell_session_correction(db_session):
             event_id="e3",
             store_id="ST1008",
             camera_id="CAM_ENTRY_01",
-            visitor_id="VIS_RE",
+            visitor_id="ID_6000RE",
             event_type="REENTRY",
             timestamp="2026-04-10T16:42:30Z",
             zone_id="ENTRY",
@@ -530,7 +530,7 @@ def test_reentry_dwell_session_correction(db_session):
             event_id="e4",
             store_id="ST1008",
             camera_id="CAM_ENTRY_01",
-            visitor_id="VIS_RE",
+            visitor_id="ID_6000RE",
             event_type="EXIT",
             timestamp="2026-04-10T16:43:10Z",
             zone_id="ENTRY",
@@ -559,7 +559,7 @@ def test_stale_feed_latency(client, db_session):
         "event_id": "c1111111-2222-3333-4444-555555555555",
         "store_id": "ST1008",
         "camera_id": "CAM_ENTRY_01",
-        "visitor_id": "VIS_STALE",
+        "visitor_id": "ID_6000STALE",
         "event_type": "ENTRY",
         "timestamp": "2026-04-10T16:40:00Z",
         "confidence": 0.95,

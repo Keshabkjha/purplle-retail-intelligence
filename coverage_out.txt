@@ -1,0 +1,125 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.0, pytest-9.0.3, pluggy-1.6.0 -- /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12
+cachedir: .pytest_cache
+rootdir: /Users/keshabkumar/purplle-retail-intelligence
+configfile: pyproject.toml
+plugins: cov-7.1.0, dash-4.1.0, anyio-4.13.0
+collecting ... collected 61 items
+
+tests/test_anomalies.py::test_anomalies_empty_db PASSED                  [  1%]
+tests/test_anomalies.py::test_billing_queue_spike_anomaly PASSED         [  3%]
+tests/test_anomalies.py::test_conversion_drop_anomaly PASSED             [  4%]
+tests/test_anomalies.py::test_comprehensive_anomalies PASSED             [  6%]
+tests/test_api_integration.py::test_rate_limit_blocks_excess PASSED      [  8%]
+tests/test_api_integration.py::test_ingest_batch_limit PASSED            [  9%]
+tests/test_api_integration.py::test_pipeline_post_event_payload PASSED   [ 11%]
+tests/test_api_integration.py::test_list_videos PASSED                   [ 13%]
+tests/test_api_integration.py::test_check_annotated_exists PASSED        [ 14%]
+tests/test_api_integration.py::test_stream_annotated_video_404 PASSED    [ 16%]
+tests/test_api_integration.py::test_stream_annotated_video_200 PASSED    [ 18%]
+tests/test_api_integration.py::test_stream_video_range PASSED            [ 19%]
+tests/test_api_integration.py::test_get_dashboard PASSED                 [ 21%]
+tests/test_api_integration.py::test_get_simulation_status PASSED         [ 22%]
+tests/test_api_integration.py::test_run_simulation_cache PASSED          [ 24%]
+tests/test_api_integration.py::test_run_simulation_force PASSED          [ 26%]
+tests/test_calibrate.py::test_click_event PASSED                         [ 27%]
+tests/test_calibrate.py::test_main_file_not_found PASSED                 [ 29%]
+tests/test_calibrate.py::test_main_image PASSED                          [ 31%]
+tests/test_calibrate.py::test_main_video PASSED                          [ 32%]
+tests/test_calibrate.py::test_main_video_failed_read PASSED              [ 34%]
+tests/test_calibrate.py::test_main_image_clear_points PASSED             [ 36%]
+tests/test_cross_camera.py::test_cross_camera_tracker_new_session PASSED [ 37%]
+tests/test_cross_camera.py::test_cross_camera_tracker_spatial_temporal_match PASSED [ 39%]
+tests/test_cross_camera.py::test_cross_camera_tracker_no_match_large_gap PASSED [ 40%]
+tests/test_cross_camera.py::test_hybrid_staff_detection PASSED           [ 42%]
+tests/test_cross_camera.py::test_appearance_based_matching PASSED        [ 44%]
+tests/test_cross_camera.py::test_transition_priors PASSED                [ 45%]
+tests/test_cross_camera.py::test_learned_staff_model_separates_examples PASSED [ 47%]
+tests/test_cross_camera.py::test_learned_identity_model_separates_examples PASSED [ 49%]
+tests/test_cross_camera.py::test_supervised_artifact_training_roundtrip PASSED [ 50%]
+tests/test_cross_camera.py::test_ingest_batch_size_limit PASSED          [ 52%]
+tests/test_cross_camera.py::test_ingest_monotonicity PASSED              [ 54%]
+tests/test_cross_camera.py::test_reentry_dwell_session_correction PASSED [ 55%]
+tests/test_cross_camera.py::test_stale_feed_latency PASSED               [ 57%]
+tests/test_ingestion.py::test_load_pos_csv_basic PASSED                  [ 59%]
+tests/test_ingestion.py::test_load_pos_csv_loyalty_filtering PASSED      [ 60%]
+tests/test_ingestion.py::test_load_pos_csv_idempotency PASSED            [ 62%]
+tests/test_ingestion.py::test_load_pos_csv_store_id_override PASSED      [ 63%]
+tests/test_metrics.py::test_health_check_empty_db PASSED                 [ 65%]
+tests/test_metrics.py::test_event_ingestion_and_idempotency PASSED       [ 67%]
+tests/test_metrics.py::test_store_metrics_calculations PASSED            [ 68%]
+tests/test_metrics.py::test_funnel_and_heatmap_values PASSED             [ 70%]
+tests/test_metrics.py::test_partial_ingestion_malformed_event PASSED     [ 72%]
+tests/test_metrics.py::test_refined_store_metrics_and_funnel PASSED      [ 73%]
+tests/test_metrics.py::test_comprehensive_funnel_scenarios PASSED        [ 75%]
+tests/test_metrics.py::test_staff_exclusion_in_metrics PASSED            [ 77%]
+tests/test_metrics.py::test_group_entry_produces_separate_events PASSED  [ 78%]
+tests/test_metrics.py::test_reentry_detection_and_funnel_handling PASSED [ 80%]
+tests/test_metrics.py::test_metrics_empty_store PASSED                   [ 81%]
+tests/test_metrics.py::test_metrics_all_staff_clip PASSED                [ 83%]
+tests/test_metrics.py::test_metrics_zero_pos_transactions PASSED         [ 85%]
+tests/test_metrics.py::test_comprehensive_funnel_with_known_journey PASSED [ 86%]
+tests/test_metrics.py::test_heatmap_confidence_flag_with_low_sessions PASSED [ 88%]
+tests/test_metrics.py::test_anomaly_detection_zero_traffic PASSED        [ 90%]
+tests/test_pipeline.py::test_point_in_polygon_square PASSED              [ 91%]
+tests/test_pipeline.py::test_point_in_polygon_complex PASSED             [ 93%]
+tests/test_pipeline.py::test_map_camera_to_floor_fallbacks PASSED        [ 95%]
+tests/test_pipeline.py::test_determine_zone_matching PASSED              [ 96%]
+tests/test_pipeline.py::test_run_detection_pipeline PASSED               [ 98%]
+tests/test_supervised_runtime.py::test_supervised_artifacts_load_at_runtime PASSED [100%]
+
+=============================== warnings summary ===============================
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:88
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:88
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:88
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:88
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:88
+  /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:88: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    parse = parser.parseString(pattern)
+
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:92
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:92
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:92
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:92
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:92
+  /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_fontconfig_pattern.py:92: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    parser.resetCache()
+
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_mathtext.py:30
+  /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/matplotlib/_mathtext.py:30: PyparsingDeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+../../../Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/sklearn/base.py:376
+  /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/sklearn/base.py:376: InconsistentVersionWarning: Trying to unpickle estimator SGDClassifier from version 1.4.1.post1 when using version 1.4.2. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+  https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+    warnings.warn(
+
+tests/test_api_integration.py::test_ingest_batch_limit
+tests/test_cross_camera.py::test_ingest_batch_size_limit
+  /Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:1002: DeprecationWarning: 'HTTP_413_REQUEST_ENTITY_TOO_LARGE' is deprecated. Use 'HTTP_413_CONTENT_TOO_LARGE' instead.
+    result = context.run(func, *args)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+_______________ coverage: platform darwin, python 3.12.0-final-0 _______________
+
+Name                          Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------------
+app/anomalies.py                 94      8     48      9    88%   52, 53->49, 62->98, 91-92, 158->183, 176-177, 188->258, 202, 214->258, 244->258, 246->245, 255-256
+app/database.py                  46      1      0      0    98%   60
+app/funnel.py                    73      1     48      4    96%   50, 87->80, 105->108, 109->112
+app/heatmap.py                   59      7     40     12    79%   19, 28, 34, 52->55, 56->39, 60-61, 64->63, 67, 68->71, 72, 79->82, 98->97
+app/main.py                     438    129    114     23    68%   31-32, 59, 142-144, 170->186, 173->186, 178->186, 181-184, 187->159, 212, 217, 231, 244->247, 252-253, 286-289, 291->300, 322-328, 336, 342-343, 353-354, 364-365, 374-434, 441-442, 450-482, 490-508, 549-565, 575->574, 610, 623, 645, 651-654, 678-681, 709->724, 724->729, 732-733, 744, 746->752, 748->746, 757-759, 773-774
+app/metrics.py                  118      3     68     10    93%   100->98, 111->130, 119->122, 125->122, 138->131, 155->158, 159->163, 176, 178-179, 192->190, 203->202
+app/models.py                    95      3      6      3    94%   73, 76, 85
+app/pos_loader.py                85     32     20      2    60%   21-24, 59-60, 70-71, 100-102, 106-109, 120-132, 136-143
+pipeline/adaptive_models.py     192     48     48     12    72%   16->18, 47-48, 51-67, 80, 88-93, 116-117, 119-122, 125-135, 139, 143-148, 199->198, 201, 210, 222, 231, 282->284, 318->320, 364
+pipeline/calibrate.py            58      7     20      5    85%   10->exit, 61->57, 65-67, 70->72, 80-83
+pipeline/detect.py              620    229    254     63    59%   18-23, 54->85, 68->85, 76-82, 87-91, 119, 121, 136-137, 140->158, 143-146, 148, 150, 152, 154, 167-178, 195->199, 197->199, 206-214, 222-223, 226-227, 230-231, 234-235, 238-239, 280, 288-289, 300, 305-306, 312, 320, 322-323, 329, 353, 374-376, 385-386, 392->391, 394, 411->414, 415-416, 419-437, 449->454, 452, 457-458, 465->445, 499->445, 510-511, 520, 531-533, 567->571, 575, 577-579, 584, 586, 607-614, 617, 618->621, 621->625, 638-641, 650-651, 681-682, 713-714, 761-762, 772-773, 799-804, 823, 828-840, 856->1029, 863->862, 881->885, 888->890, 894-1026, 1030-1077, 1086->1107, 1098-1105, 1116-1117, 1121-1125
+-------------------------------------------------------------------------
+TOTAL                          1878    468    666    143    72%
+
+2 files skipped due to complete coverage.
+Coverage XML written to file coverage.xml
+Required test coverage of 55% reached. Total coverage: 71.58%
+======================= 61 passed, 14 warnings in 7.38s ========================

@@ -371,22 +371,41 @@ def get_store_heatmap(store_id: str, camera_id: Optional[str] = None, db: Sessio
 @app.get("/stores/{store_id}/cameras")
 def get_store_cameras(store_id: str, db: Session = Depends(get_db)):
     """Returns per-camera stats: visitor count, event count, processed status."""
-    CAMERA_META = {
-        # Store 1 (ST1008) — Brigade Road Bangalore
-        "cam1":  {"display_name": "Entry (Store 1)",          "video_file": "CAM 3 - entry.mp4",    "icon": "door-open",   "store_id": "ST1008", "folder": "Store 1"},
-        "CAM1":  {"display_name": "Zone Floor 1 (Store 1)",  "video_file": "CAM 1 - zone.mp4",    "icon": "store",       "store_id": "ST1008", "folder": "Store 1"},
-        "CAM2":  {"display_name": "Zone Floor 2 (Store 1)",  "video_file": "CAM 2 - zone.mp4",    "icon": "store",       "store_id": "ST1008", "folder": "Store 1"},
-        "CAM5":  {"display_name": "Billing (Store 1)",       "video_file": "CAM 5 - billing.mp4", "icon": "credit-card", "store_id": "ST1008", "folder": "Store 1"},
-        # Store 2 (ST1076) — Purplle MUM 1076
-        "cam1_s2":               {"display_name": "Entry 1 (Store 2)",     "video_file": "entry 1.mp4",    "icon": "door-open",   "store_id": "ST1076", "folder": "Store 2"},
-        "cam2_s2":               {"display_name": "Entry 2 (Store 2)",     "video_file": "entry 2.mp4",    "icon": "door-open",   "store_id": "ST1076", "folder": "Store 2"},
-        "CAM2_s2":               {"display_name": "Zone Floor (Store 2)",  "video_file": "zone.mp4",       "icon": "store",       "store_id": "ST1076", "folder": "Store 2"},
-        "PURPLLE_MUM_1076_CAM6": {"display_name": "Billing (Store 2)",     "video_file": "billing_area.mp4","icon": "credit-card","store_id": "ST1076", "folder": "Store 2"},
-    }
-    all_cameras = list(CAMERA_META.keys())
+    import os
+    import json
+    
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    layout_path = os.path.join(base_dir, "config", "store_layout.json")
+    
+    cameras_meta = {}
+    if os.path.exists(layout_path):
+        with open(layout_path, "r") as f:
+            layout = json.load(f)
+            
+        store_config = next((s for s in layout.get("stores", []) if s["store_id"] == store_id), None)
+        if store_config:
+            cams = store_config.get("cameras", {})
+            roles = store_config.get("camera_roles", {})
+            for cam_id, video_file in cams.items():
+                role = roles.get(cam_id, "zone")
+                if role == "entry":
+                    icon = "door-open"
+                    display_name = f"Entry ({cam_id})"
+                elif role == "billing":
+                    icon = "credit-card"
+                    display_name = f"Billing ({cam_id})"
+                else:
+                    icon = "store"
+                    display_name = f"Zone ({cam_id})"
+                
+                cameras_meta[cam_id] = {
+                    "display_name": display_name,
+                    "video_file": video_file,
+                    "icon": icon
+                }
+    
     result = []
-    for cam_id in all_cameras:
-        meta = CAMERA_META[cam_id]
+    for cam_id, meta in cameras_meta.items():
         visitor_count = (
             db.query(DBEvent.visitor_id)
             .filter(DBEvent.store_id == store_id, DBEvent.camera_id == cam_id, DBEvent.is_staff.is_(False))
@@ -620,9 +639,16 @@ def stream_video(video_name: str, request: Request):
     """Serves the raw video file supporting partial content range requests."""
     from fastapi.responses import FileResponse
     import os
-    cctv_dir = "CCTV Footage"
-    filepath = os.path.join(cctv_dir, os.path.basename(video_name))
-    if not os.path.exists(filepath):
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    search_dirs = ["Store 1", "Store 2", "CCTV Footage"]
+    filepath = None
+    for d in search_dirs:
+        p = os.path.join(base_dir, d, os.path.basename(video_name))
+        if os.path.exists(p):
+            filepath = p
+            break
+            
+    if not filepath:
         raise HTTPException(status_code=404, detail="Video not found")
         
     range_header = request.headers.get("range")
@@ -640,8 +666,12 @@ def check_annotated_exists(video_name: str):
     """Checks if the annotated video file exists."""
     import os
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    filepath = os.path.join(base_dir, f"annotated_{os.path.basename(video_name)}")
-    return {"exists": os.path.exists(filepath)}
+    search_dirs = [".", "Store 1", "Store 2", "CCTV Footage"]
+    for d in search_dirs:
+        filepath = os.path.join(base_dir, d, f"annotated_{os.path.basename(video_name)}")
+        if os.path.exists(filepath):
+            return {"exists": True}
+    return {"exists": False}
 
 
 @app.get("/api/annotated_stream/{video_name}")
@@ -650,8 +680,15 @@ def stream_annotated_video(video_name: str, request: Request):
     from fastapi.responses import FileResponse
     import os
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    filepath = os.path.join(base_dir, f"annotated_{os.path.basename(video_name)}")
-    if not os.path.exists(filepath):
+    search_dirs = [".", "Store 1", "Store 2", "CCTV Footage"]
+    filepath = None
+    for d in search_dirs:
+        p = os.path.join(base_dir, d, f"annotated_{os.path.basename(video_name)}")
+        if os.path.exists(p):
+            filepath = p
+            break
+            
+    if not filepath:
         raise HTTPException(status_code=404, detail="Annotated video not found")
         
     range_header = request.headers.get("range")

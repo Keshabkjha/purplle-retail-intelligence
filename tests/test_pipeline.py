@@ -43,17 +43,22 @@ def test_map_camera_to_floor_fallbacks():
 
 
 def test_determine_zone_matching():
+    mock_zones = [
+        {"camera_id": "CAM_ENTRY_01", "zone_id": "ENTRY", "polygon_coords": [[0, 0], [100, 0], [100, 400], [0, 400]]},
+        {"camera_id": "CAM_BILLING_01", "zone_id": "BILLING", "polygon_coords": [[700, 0], [900, 0], [900, 400], [700, 400]]}
+    ]
+
     # Test zone checking for entry
-    zone = determine_zone(50, 300, "CAM_ENTRY_01")
-    assert zone == "ENTRY"
+    zone_result = determine_zone(50, 300, "CAM_ENTRY_01", mock_zones)
+    assert zone_result[0] == "ENTRY"
 
     # Test zone checking for billing
-    zone = determine_zone(800, 300, "CAM_BILLING_01")
-    assert zone == "BILLING"
+    zone_result = determine_zone(800, 300, "CAM_BILLING_01", mock_zones)
+    assert zone_result[0] == "BILLING"
 
-    # Test out of bounds mapping returns None
-    zone = determine_zone(999, 999, "CAM_ENTRY_01")
-    assert zone is None
+    # Test out of bounds mapping returns None tuple
+    zone_result = determine_zone(999, 999, "CAM_ENTRY_01", mock_zones)
+    assert zone_result == (None, None, None, None)
 
 
 @patch("pipeline.detect.cv2.VideoCapture")

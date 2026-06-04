@@ -190,11 +190,16 @@ def get_store_anomalies_data(store_id: str, db: Session):
             with open(layout_path, "r") as f:
                 layout = json.load(f)
 
-            retail_zones = [
-                z["zone_id"]
-                for z in layout.get("zones", [])
-                if z["zone_id"] not in ("ENTRY", "EXIT", "BILLING")
-            ]
+            store_config = next((s for s in layout.get("stores", []) if s["store_id"] == store_id), None)
+            
+            if store_config:
+                retail_zones = [
+                    z["zone_id"]
+                    for z in store_config.get("zones", [])
+                    if z["zone_id"] not in ("ENTRY", "EXIT", "BILLING")
+                ]
+            else:
+                retail_zones = []
 
             # Find the latest event timestamp to anchor the 30-min window
             latest_event = (

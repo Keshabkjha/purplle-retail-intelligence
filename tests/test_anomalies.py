@@ -168,7 +168,7 @@ def test_comprehensive_anomalies(client, db_session):
     # Add current event with deep queue (depth = 6)
     db_session.add(DBEvent(
         event_id="q_curr", store_id=store_id, camera_id="CAM_BILLING_01", visitor_id="VIS_Q_CURR",
-        event_type="BILLING_QUEUE_JOIN", timestamp="2026-04-10T10:10:00Z", zone_id="BILLING",
+        event_type="BILLING_QUEUE_JOIN", timestamp="2026-04-10T15:10:00Z", zone_id="BILLING",
         is_staff=False, confidence=0.9, metadata_json={"queue_depth": 6}
     ))
 

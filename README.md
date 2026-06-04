@@ -132,71 +132,89 @@ purplle-retail-intelligence/
 
 ## 🚀 Quick Start
 
-### Option A: Docker (Recommended)
+### Option A: Docker (Recommended) — All-in-One
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/keshabkjha/purplle-retail-intelligence.git
 cd purplle-retail-intelligence
 
-# 2. Start the API and database
-docker compose up -d --build
+# 2. Build the Docker image
+docker build -f api.Dockerfile -t store-intelligence .
 
-# 3. Seed the POS transaction data inside the container
-docker compose exec api python3 -m app.ingestion
+# 3. Start the API via docker-compose
+docker compose up -d api
 
-# 4. Verify the API is live
+# 4. Run tests inside Docker (verify everything works)
+docker run --rm -v "$(pwd):/workspace" -w /workspace store-intelligence \
+  sh -c "pip install -q -r requirements-dev.txt && python -m pytest tests/ -v"
+
+# 5. Verify the API is live
 curl http://localhost:8000/health
 
-# 5. Run the CV pipeline on the host (edge client) streaming events to the API container
-python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
+# 6. Run the CV pipeline on a CCTV clip (streaming events to the API)
+docker run --rm -v "$(pwd):/workspace" -w /workspace store-intelligence \
+  python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
 
-# 6. Open the live dashboard
+# 7. Open the live dashboard
 open http://localhost:8000/dashboard
 ```
 
-### Option B: Local Development
+**For faster iteration, use helper scripts:**
+```bash
+./run-api.sh              # Start API
+./run-tests.sh            # Run all tests
+./run-tests.sh -k test_   # Run specific tests
+```
+
+See [DOCKER.md](DOCKER.md) for full Docker documentation.
+
+### Option B: Local Development (requires Python 3.11+)
 
 ```bash
-# Install dependencies
+# Install dependencies (or use a virtual environment)
 pip install -r requirements-dev.txt
 
 # Start the API server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# In a separate terminal, seed the POS data
-python3 -m app.ingestion
-
-# Run the pipeline locally on a video clip
+# In a separate terminal, run the CV pipeline
 python3 pipeline/detect.py "CCTV Footage/entry_camera.mp4"
+
+# Run tests
+python3 -m pytest tests/ -v
 ```
 
-### Option C: Run Tests
+### Option C: Run Tests in Docker
 
 ```bash
-# Run the full comprehensive test suite (26 tests covering edge cases)
-python3 -m pytest tests/ -v
+# Run all tests
+docker run --rm -v "$(pwd):/workspace" -w /workspace store-intelligence \
+  sh -c "pip install -q -r requirements-dev.txt && python -m pytest tests/ -v"
 
-# Expected output:
-# tests/test_cross_camera.py::test_appearance_based_matching PASSED
-# tests/test_cross_camera.py::test_transition_priors PASSED
-# tests/test_cross_camera.py::test_reentry_dwell_session_correction PASSED
-# tests/test_anomalies.py::test_conversion_drop_anomaly PASSED
-# ... 26 passed in ~3s ✅
+# Run specific test file
+docker run --rm -v "$(pwd):/workspace" -w /workspace store-intelligence \
+  sh -c "pip install -q -r requirements-dev.txt && python -m pytest tests/test_metrics.py -v"
+
+# Run with coverage report
+docker run --rm -v "$(pwd):/workspace" -w /workspace store-intelligence \
+  sh -c "pip install -q -r requirements-dev.txt && python -m pytest tests/ -v --cov"
 ```
 
 ### Optional: Train Supervised Models
 
-If you have labeled staff crops or pairwise identity annotations, you can train offline models and save them into `pipeline/model_state/`.
+If you have labeled staff crops or pairwise identity annotations, you can train offline models:
 
 ```bash
-python3 scripts/train_supervised_models.py \
-  --staff-labels data/labels/staff_labels.jsonl \
-  --reid-pairs data/labels/reid_pairs.jsonl \
-  --output-dir pipeline/model_state
+docker run --rm -v "$(pwd):/workspace" -w /workspace store-intelligence \
+  python3 scripts/train_supervised_models.py \
+    --staff-labels data/labels/staff_labels.jsonl \
+    --reid-pairs data/labels/reid_pairs.jsonl \
+    --output-dir pipeline/model_state
 ```
 
-At runtime, `pipeline/detect.py` automatically prefers `staff_supervised.pkl` and `identity_supervised.pkl` when those artifacts exist. If they are missing, the system falls back to the lightweight online models so the demo still works out of the box.
+At runtime, `pipeline/detect.py` automatically prefers trained artifacts when present. If missing, the system falls back to lightweight online models.
+
 
 Sample annotation templates live in:
 - `examples/labels/staff_labels.sample.jsonl`
