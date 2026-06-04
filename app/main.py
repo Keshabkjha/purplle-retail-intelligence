@@ -23,6 +23,7 @@ from app.funnel import get_store_funnel_data
 from app.heatmap import get_store_heatmap_data
 from app.metrics import get_store_metrics_data, parse_timestamp
 from app.models import EventSchema
+from app.pos_loader import load_pos_csv
 
 
 @asynccontextmanager
@@ -371,11 +372,16 @@ def get_store_heatmap(store_id: str, camera_id: Optional[str] = None, db: Sessio
 def get_store_cameras(store_id: str, db: Session = Depends(get_db)):
     """Returns per-camera stats: visitor count, event count, processed status."""
     CAMERA_META = {
-        "CAM_ENTRY_01":   {"display_name": "Entry Camera",   "video_file": "entry_camera.mp4",   "icon": "door-open"},
-        "CAM_MAIN_01":    {"display_name": "Main Floor 1",   "video_file": "main_floor_1.mp4",   "icon": "store"},
-        "CAM_MAIN_02":    {"display_name": "Main Floor 2",   "video_file": "main_floor_2.mp4",   "icon": "store"},
-        "CAM_MAIN_03":    {"display_name": "Main Floor 3",   "video_file": "main_floor_3.mp4",   "icon": "store"},
-        "CAM_BILLING_01": {"display_name": "Billing Counter", "video_file": "billing_camera.mp4", "icon": "credit-card"},
+        # Store 1 (ST1008) — Brigade Road Bangalore
+        "cam1":  {"display_name": "Entry (Store 1)",          "video_file": "CAM 3 - entry.mp4",    "icon": "door-open",   "store_id": "ST1008", "folder": "Store 1"},
+        "CAM1":  {"display_name": "Zone Floor 1 (Store 1)",  "video_file": "CAM 1 - zone.mp4",    "icon": "store",       "store_id": "ST1008", "folder": "Store 1"},
+        "CAM2":  {"display_name": "Zone Floor 2 (Store 1)",  "video_file": "CAM 2 - zone.mp4",    "icon": "store",       "store_id": "ST1008", "folder": "Store 1"},
+        "CAM5":  {"display_name": "Billing (Store 1)",       "video_file": "CAM 5 - billing.mp4", "icon": "credit-card", "store_id": "ST1008", "folder": "Store 1"},
+        # Store 2 (ST1076) — Purplle MUM 1076
+        "cam1_s2":               {"display_name": "Entry 1 (Store 2)",     "video_file": "entry 1.mp4",    "icon": "door-open",   "store_id": "ST1076", "folder": "Store 2"},
+        "cam2_s2":               {"display_name": "Entry 2 (Store 2)",     "video_file": "entry 2.mp4",    "icon": "door-open",   "store_id": "ST1076", "folder": "Store 2"},
+        "CAM2_s2":               {"display_name": "Zone Floor (Store 2)",  "video_file": "zone.mp4",       "icon": "store",       "store_id": "ST1076", "folder": "Store 2"},
+        "PURPLLE_MUM_1076_CAM6": {"display_name": "Billing (Store 2)",     "video_file": "billing_area.mp4","icon": "credit-card","store_id": "ST1076", "folder": "Store 2"},
     }
     all_cameras = list(CAMERA_META.keys())
     result = []
@@ -498,20 +504,74 @@ def get_store_system_stats(store_id: str, db: Session = Depends(get_db)):
     }
 
 class SimulateRequest(BaseModel):
-    video: str
+    video: str          # Can be filename or relative path like "Store 1/CAM 3 - entry.mp4"
     force: Optional[bool] = False
+
+
+class POSLoadRequest(BaseModel):
+    store_id: Optional[str] = None  # Override store_id in CSV
+
+
+@app.post("/api/load-pos")
+def load_pos_data(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    store_id_override: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Load POS transactions CSV from the project root.
+    Accepts actual Purplle CSV format:
+        order_id, order_date, order_time, store_id, product_id, brand_name, total_amount
+
+    Filters out Purplle loyalty card scans (amount = 0).
+    Idempotent — safe to call multiple times.
+    """
+    import glob
+    # Find POS CSV file in project root
+    pos_files = glob.glob("POS*.csv") + glob.glob("pos*.csv") + glob.glob("*transactions*.csv")
+    if not pos_files:
+        raise HTTPException(status_code=404, detail="No POS CSV file found in project root. Expected 'POS - sample transactions.csv' or similar.")
+
+    results = {}
+    for pos_file in pos_files:
+        try:
+            with open(pos_file, "r", encoding="utf-8-sig") as f:
+                csv_content = f.read()
+            result = load_pos_csv(csv_content, db, store_id_override=store_id_override)
+            results[pos_file] = result
+        except Exception as e:
+            results[pos_file] = {"error": str(e)}
+
+    return {"status": "ok", "files_processed": len(pos_files), "results": results}
 
 @app.get("/api/videos")
 def list_videos():
-    """Returns a list of available mp4 videos in the CCTV Footage directory."""
-    import os
+    """Returns all available mp4 videos across all store subdirectories."""
     import glob
     videos = []
-    cctv_dir = "CCTV Footage"
-    if os.path.exists(cctv_dir):
-        for file in glob.glob(os.path.join(cctv_dir, "*.mp4")):
-            videos.append(os.path.basename(file))
-    return {"videos": sorted(videos)}
+    # Search in all known store/footage directories
+    search_dirs = ["CCTV Footage", "Store 1", "Store 2", "store_1", "store_2"]
+    for search_dir in search_dirs:
+        if os.path.exists(search_dir):
+            for file in glob.glob(os.path.join(search_dir, "*.mp4")):
+                rel_path = file  # keep relative path with folder for disambiguation
+                videos.append({
+                    "filename": os.path.basename(file),
+                    "path": file,
+                    "folder": search_dir,
+                    "store_id": "ST1008" if "Store 1" in search_dir or "store_1" in search_dir
+                               else ("ST1076" if "Store 2" in search_dir or "store_2" in search_dir
+                               else "unknown"),
+                })
+    # Deduplicate by path
+    seen = set()
+    unique_videos = []
+    for v in videos:
+        if v["path"] not in seen:
+            seen.add(v["path"])
+            unique_videos.append(v)
+    return {"videos": sorted(unique_videos, key=lambda x: x["path"])}
 
 
 def send_bytes_range_requests(file_path: str, range_header: str):
@@ -655,18 +715,27 @@ def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks, db: 
 
     def run_pipeline(video_name: str):
         import subprocess
-        import os
         try:
-            # Ensure no directory traversal hacking
-            safe_video_name = os.path.basename(video_name)
-            video_path = os.path.join("CCTV Footage", safe_video_name)
-            
-            if os.path.exists(video_path):
+            safe_video_name = video_name  # May include subfolder like "Store 1/CAM 3 - entry.mp4"
+            # Search for the video across known store dirs
+            search_dirs = ["CCTV Footage", "Store 1", "Store 2", "store_1", "store_2", "."]
+            video_path = None
+            base = os.path.basename(safe_video_name)
+            if os.path.exists(safe_video_name):
+                video_path = safe_video_name
+            else:
+                for d in search_dirs:
+                    candidate = os.path.join(d, base)
+                    if os.path.exists(candidate):
+                        video_path = candidate
+                        break
+
+            if video_path:
                 env = os.environ.copy()
                 env["PYTHONPATH"] = os.getcwd()
                 subprocess.run(["python3", "pipeline/detect.py", video_path], check=True, env=env)
             else:
-                print(f"Simulation skipped: {video_path} not found.")
+                print(f"Simulation skipped: '{safe_video_name}' not found in any store directory.")
         except Exception as e:
             print(f"Simulation failed: {e}")
 

@@ -1025,9 +1025,9 @@
             
             const filtered = allFeedEvents.filter(ev => {
                 if (feedFilter === 'ALL') return true;
-                if (feedFilter === 'ENTRY') return ['ENTRY','EXIT','REENTRY'].includes(ev.event_type);
-                if (feedFilter === 'DWELL') return ['ZONE_DWELL','DWELL','ZONE_ENTER'].includes(ev.event_type);
-                if (feedFilter === 'QUEUE') return ['BILLING_QUEUE_JOIN','BILLING_QUEUE_ABANDON'].includes(ev.event_type);
+                if (feedFilter === 'ENTRY') return ['ENTRY','EXIT','REENTRY','entry','exit'].includes(ev.event_type);
+                if (feedFilter === 'DWELL') return ['ZONE_DWELL','DWELL','ZONE_ENTER','zone_entered','zone_exited'].includes(ev.event_type);
+                if (feedFilter === 'QUEUE') return ['BILLING_QUEUE_JOIN','BILLING_QUEUE_ABANDON','queue_completed','queue_abandoned'].includes(ev.event_type);
                 if (feedFilter === 'REENTRY') return ev.event_type === 'REENTRY';
                 return true;
             });
@@ -1050,22 +1050,22 @@
             let displayType = 'EVENT', color = 'text-indigo-400', messageText = '';
             const eventType = ev.event_type;
 
-            if (eventType === 'ZONE_DWELL' || eventType === 'DWELL' || eventType === 'ZONE_ENTER') {
+            if (eventType === 'ZONE_DWELL' || eventType === 'DWELL' || eventType === 'ZONE_ENTER' || eventType === 'zone_entered' || eventType === 'zone_exited') {
                 displayType = 'DWELL'; color = 'text-emerald-400';
                 messageText = `Visitor ${ev.visitor_id?.substring(0,10)} in ${ev.zone_id} (${(ev.dwell_ms/1000).toFixed(0)}s)`;
-            } else if (eventType === 'BILLING_QUEUE_JOIN') {
+            } else if (eventType === 'BILLING_QUEUE_JOIN' || eventType === 'queue_completed') {
                 displayType = 'QUEUE'; color = 'text-amber-400';
                 messageText = `Visitor ${ev.visitor_id?.substring(0,10)} joined Checkout Queue (depth: ${ev.metadata?.queue_depth || 1})`;
-            } else if (eventType === 'BILLING_QUEUE_ABANDON') {
+            } else if (eventType === 'BILLING_QUEUE_ABANDON' || eventType === 'queue_abandoned') {
                 displayType = 'ABANDON'; color = 'text-rose-400';
                 messageText = `Visitor ${ev.visitor_id?.substring(0,10)} abandoned Checkout Queue`;
             } else if (eventType === 'REENTRY') {
                 displayType = 'REENTRY'; color = 'text-cyan-400';
                 messageText = `Cross-Camera Re-ID: Visitor ${ev.visitor_id?.substring(0,10)} re-entered`;
-            } else if (eventType === 'ENTRY') {
+            } else if (eventType === 'ENTRY' || eventType === 'entry') {
                 displayType = 'ENTRY'; color = 'text-indigo-400';
                 messageText = `Visitor ${ev.visitor_id?.substring(0,10)} entered via ${ev.camera_id}`;
-            } else if (eventType === 'EXIT') {
+            } else if (eventType === 'EXIT' || eventType === 'exit') {
                 displayType = 'EXIT'; color = 'text-slate-400';
                 messageText = `Visitor ${ev.visitor_id?.substring(0,10)} exited (${ev.zone_id})`;
             } else {
@@ -1140,9 +1140,9 @@
 
                     // Check filter match before appending to DOM
                     const matchesFilter = feedFilter === 'ALL'
-                        || (feedFilter === 'ENTRY' && ['ENTRY','EXIT','REENTRY'].includes(ev.event_type))
-                        || (feedFilter === 'DWELL' && ['ZONE_DWELL','DWELL','ZONE_ENTER'].includes(ev.event_type))
-                        || (feedFilter === 'QUEUE' && ['BILLING_QUEUE_JOIN','BILLING_QUEUE_ABANDON'].includes(ev.event_type))
+                        || (feedFilter === 'ENTRY' && ['ENTRY','EXIT','REENTRY','entry','exit'].includes(ev.event_type))
+                        || (feedFilter === 'DWELL' && ['ZONE_DWELL','DWELL','ZONE_ENTER','zone_entered','zone_exited'].includes(ev.event_type))
+                        || (feedFilter === 'QUEUE' && ['BILLING_QUEUE_JOIN','BILLING_QUEUE_ABANDON','queue_completed','queue_abandoned'].includes(ev.event_type))
                         || (feedFilter === 'REENTRY' && ev.event_type === 'REENTRY');
 
                     if (matchesFilter) {

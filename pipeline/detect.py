@@ -31,27 +31,57 @@ from pipeline.adaptive_models import (  # noqa: E402
     build_staff_feature_vector,
 )
 
-# Load layouts
+# ---------------------------------------------------------------------------
+# Layout + Calibration loading (multi-store)
+# ---------------------------------------------------------------------------
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LAYOUT_PATH = os.path.join(ROOT_DIR, "config", "store_layout.json")
 CALIBRATION_PATH = os.path.join(ROOT_DIR, "config", "calibration.json")
 INGEST_URL = os.getenv("INGEST_URL", "http://localhost:8000/events/ingest")
 
+# Will be resolved per video
 store_id = os.getenv("STORE_ID", "ST1008")
-zones = []
-cameras_mapping = {}
+store_code = os.getenv("STORE_CODE", "store_1008")
+zones: list = []
+cameras_mapping: dict = {}
+camera_roles: dict = {}
+
+# Multi-store layout map: store_id -> {zones, cameras, camera_roles, ...}
+STORE_LAYOUT_MAP: dict = {}
+# Camera ID -> store_id map (for quick lookups)
+CAM_TO_STORE: dict = {}
 
 if os.path.exists(LAYOUT_PATH):
     try:
         with open(LAYOUT_PATH, "r") as f:
             layout_data = json.load(f)
+
+        # Support both old (single store) and new (multi-store) formats
+        if "stores" in layout_data:
+            for store_entry in layout_data["stores"]:
+                sid = store_entry["store_id"]
+                STORE_LAYOUT_MAP[sid] = store_entry
+                for cam_id in store_entry.get("cameras", {}).keys():
+                    CAM_TO_STORE[cam_id] = sid
+            # Default store
+            default_sid = layout_data.get("default_store_id", list(STORE_LAYOUT_MAP.keys())[0])
+            if default_sid in STORE_LAYOUT_MAP:
+                store_id = default_sid
+                store_code = STORE_LAYOUT_MAP[default_sid].get("store_code", store_id.lower())
+                zones = STORE_LAYOUT_MAP[default_sid].get("zones", [])
+                cameras_mapping = STORE_LAYOUT_MAP[default_sid].get("cameras", {})
+                camera_roles = STORE_LAYOUT_MAP[default_sid].get("camera_roles", {})
+        else:
+            # Legacy single-store format
             store_id = layout_data.get("store_id", "ST1008")
+            store_code = layout_data.get("store_code", store_id.lower())
             zones = layout_data.get("zones", [])
             cameras_mapping = layout_data.get("cameras", {})
+            camera_roles = layout_data.get("camera_roles", {})
     except Exception as e:
         print(f"Error loading layout: {e}")
 
-# Load or initialize calibration
+# Load calibration
 calibration = {}
 if os.path.exists(CALIBRATION_PATH):
     try:
@@ -62,6 +92,95 @@ if os.path.exists(CALIBRATION_PATH):
 
 MODEL_REGISTRY = AdaptiveModelRegistry()
 
+
+# ---------------------------------------------------------------------------
+# Camera-ID resolution from filename
+# ---------------------------------------------------------------------------
+
+def resolve_camera_id_and_store(video_path: str) -> tuple[str, str, str, list, dict, str]:
+    """
+    Given a video path, resolve:
+    - camera_id  (matches keys in store_layout.json cameras dict)
+    - store_id
+    - store_code
+    - zones list
+    - camera_roles dict
+    - camera_role ('entry' | 'zone' | 'billing')
+
+    Handles actual filenames:
+      Store 1: CAM 1 - zone.mp4, CAM 2 - zone.mp4, CAM 3 - entry.mp4, CAM 5 - billing.mp4
+      Store 2: entry 1.mp4, entry 2.mp4, zone.mp4, billing_area.mp4
+    """
+    base_name = os.path.basename(video_path).lower()
+    parent_dir = os.path.basename(os.path.dirname(video_path))
+
+    # Determine which store based on parent folder
+    if "store 1" in parent_dir.lower() or "store1" in parent_dir.lower():
+        sid = "ST1008"
+    elif "store 2" in parent_dir.lower() or "store2" in parent_dir.lower():
+        sid = "ST1076"
+    else:
+        # Fall back to env or default
+        sid = os.getenv("STORE_ID", "ST1008")
+
+    store_entry = STORE_LAYOUT_MAP.get(sid, {})
+    s_code = store_entry.get("store_code", sid.lower())
+    s_zones = store_entry.get("zones", [])
+    s_camera_roles = store_entry.get("camera_roles", {})
+    cameras = store_entry.get("cameras", {})
+
+    # Map filename -> camera_id by matching against cameras dict values
+    cam_id = None
+    for cid, filename in cameras.items():
+        if filename.lower() == os.path.basename(video_path).lower():
+            cam_id = cid
+            break
+
+    # Fallback: infer camera_id from filename patterns
+    if cam_id is None:
+        if "cam 3" in base_name or "entry" in base_name and "1" in base_name:
+            # Store 1 entry or Store 2 entry 1
+            if sid == "ST1008":
+                cam_id = "cam1"
+            else:
+                cam_id = "cam1" if "1" in base_name else "cam2"
+        elif "cam 1" in base_name:
+            cam_id = "CAM1"
+        elif "cam 2" in base_name or ("zone" in base_name and "cam" not in base_name):
+            cam_id = "CAM2" if sid == "ST1008" else "CAM2"
+        elif "cam 5" in base_name or "billing" in base_name:
+            cam_id = "CAM5" if sid == "ST1008" else "PURPLLE_MUM_1076_CAM6"
+        elif "entry 2" in base_name or "entry2" in base_name:
+            cam_id = "cam2"
+        else:
+            cam_id = "CAM_UNKNOWN"
+
+    role = s_camera_roles.get(cam_id, "zone")
+    return cam_id, sid, s_code, s_zones, s_camera_roles, role
+
+
+# ---------------------------------------------------------------------------
+# Age bucket helper
+# ---------------------------------------------------------------------------
+
+def age_to_bucket(age: int) -> str:
+    if age < 18:
+        return "18-24"
+    elif age < 25:
+        return "18-24"
+    elif age < 35:
+        return "25-34"
+    elif age < 45:
+        return "35-44"
+    elif age < 55:
+        return "45-54"
+    else:
+        return "55+"
+
+
+# ---------------------------------------------------------------------------
+# Spatial helpers
+# ---------------------------------------------------------------------------
 
 def point_in_polygon(x, y, polygon):
     """Ray casting algorithm for point-in-polygon test."""
@@ -83,7 +202,6 @@ def point_in_polygon(x, y, polygon):
 
 def map_camera_to_floor(px, py, camera_id, frame_w=1920, frame_h=1080):
     """Maps coordinates from camera frame to floor plan using Homography or simple scaling."""
-    # Check if we have calibration points for this camera
     if camera_id in calibration:
         try:
             pts_src = np.array(calibration[camera_id]["src"], dtype=np.float32)
@@ -95,26 +213,30 @@ def map_camera_to_floor(px, py, camera_id, frame_w=1920, frame_h=1080):
         except Exception as e:
             print(f"Homography failed for {camera_id}: {e}")
 
-    # Fallback to sensible scaling mapping from 1920x1080 (standard) to 940x451 (floor plan)
-    # Different cameras look at different sections of the store
+    # Fallback linear scaling: map to 940x470 floor plan coords
     scale_x = 940.0 / frame_w
-    scale_y = 451.0 / frame_h
+    scale_y = 470.0 / frame_h
 
-    # Simple linear bounding fallbacks per camera
-    if camera_id == "CAM_ENTRY_01":
-        # Entry is on the left side
-        wx = px * (150.0 / frame_w)
-        wy = 200.0 + py * (200.0 / frame_h)
-    elif camera_id == "CAM_BILLING_01":
-        # Billing is on the right side
-        wx = 700.0 + px * (200.0 / frame_w)
-        wy = 100.0 + py * (400.0 / frame_h)
-    elif camera_id == "CAM_MAIN_01":
-        wx = px * (400.0 / frame_w)
-        wy = py * (300.0 / frame_h)
-    elif camera_id == "CAM_MAIN_02":
-        wx = px * (500.0 / frame_w)
-        wy = py * (300.0 / frame_h)
+    if camera_id in ("cam1",):
+        # Entry camera — left side of store
+        wx = px * (130.0 / frame_w)
+        wy = 150.0 + py * (280.0 / frame_h)
+    elif camera_id == "CAM1":
+        # Zone camera 1 — left half of store
+        wx = px * (470.0 / frame_w)
+        wy = py * (470.0 / frame_h)
+    elif camera_id == "CAM2":
+        # Zone camera 2 — right half of store
+        wx = 470.0 + px * (470.0 / frame_w)
+        wy = py * (470.0 / frame_h)
+    elif camera_id in ("CAM5", "PURPLLE_MUM_1076_CAM6"):
+        # Billing camera — far right
+        wx = 820.0 + px * (120.0 / frame_w)
+        wy = 100.0 + py * (360.0 / frame_h)
+    elif camera_id == "cam2":
+        # Store 2 entry 2
+        wx = px * (200.0 / frame_w)
+        wy = 500.0 + py * (120.0 / frame_h)
     else:
         wx = px * scale_x
         wy = py * scale_y
@@ -122,69 +244,61 @@ def map_camera_to_floor(px, py, camera_id, frame_w=1920, frame_h=1080):
     return wx, wy
 
 
-def determine_zone(wx, wy, camera_id):
+def determine_zone(wx, wy, camera_id, active_zones):
     """Finds which zone contains the warped floor coordinates."""
-    # Match camera specific zones first
-    for zone in zones:
-        if zone["camera_id"] == camera_id:
+    # Camera-specific zones first
+    for zone in active_zones:
+        if zone.get("camera_id") == camera_id:
             coords = zone["polygon_coords"]
             if point_in_polygon(wx, wy, coords):
-                return zone["zone_id"]
+                return zone["zone_id"], zone.get("zone_name", zone["zone_id"]), zone.get("zone_type", "SHELF"), zone.get("is_revenue_zone", "Yes")
 
-    # Global fallback match across any camera zone
-    for zone in zones:
+    # Global fallback
+    for zone in active_zones:
         coords = zone["polygon_coords"]
         if point_in_polygon(wx, wy, coords):
-            return zone["zone_id"]
+            return zone["zone_id"], zone.get("zone_name", zone["zone_id"]), zone.get("zone_type", "SHELF"), zone.get("is_revenue_zone", "Yes")
 
-    return None
+    return None, None, None, None
 
+
+# ---------------------------------------------------------------------------
+# Staff detection
+# ---------------------------------------------------------------------------
 
 def is_staff_heuristic(track_id, bbox, frame):
-    """Detect staff by analyzing the uniform color (e.g. black/dark grey) in the upper torso."""
+    """Detect staff by analyzing uniform color (black/dark grey) in the upper torso."""
     try:
         x1, y1, x2, y2 = map(int, bbox)
-        # Ensure coordinates are within frame
         h, w = frame.shape[:2]
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w, x2), min(h, y2)
 
-        # Crop to top 50% (upper torso)
         torso_y2 = y1 + max(1, (y2 - y1) // 2)
         torso = frame[y1:torso_y2, x1:x2]
-
         if torso.size == 0:
             return False
 
-        # Convert to HSV
         hsv_torso = cv2.cvtColor(torso, cv2.COLOR_BGR2HSV)
-
-        # Define color range for Black/Dark Grey uniform
         lower_black = np.array([0, 0, 0])
         upper_black = np.array([180, 255, 50])
-
         mask = cv2.inRange(hsv_torso, lower_black, upper_black)
-
-        # Calculate percentage of matching pixels
         match_ratio = cv2.countNonZero(mask) / (torso.shape[0] * torso.shape[1] + 1e-6)
-
-        # If > 30% of torso is black, assume staff
-        if match_ratio > 0.30:
-            return True
+        return match_ratio > 0.30
     except Exception:
-        pass
+        return False
 
-    return False
 
+# ---------------------------------------------------------------------------
+# Appearance embedding for Re-ID
+# ---------------------------------------------------------------------------
 
 def compute_appearance_embedding(crop):
     """Extract a lightweight normalized HSV color histogram as an appearance embedding."""
     try:
         if crop is None or crop.size == 0:
             return None
-        # Convert to HSV color space
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        # 3D HSV histogram: 8 Hue bins, 4 Saturation bins, 4 Value bins
         hist = cv2.calcHist([hsv], [0, 1, 2], None, [8, 4, 4], [0, 180, 0, 256, 0, 256])
         cv2.normalize(hist, hist)
         return hist.flatten().tolist()
@@ -193,7 +307,7 @@ def compute_appearance_embedding(crop):
 
 
 def compare_appearance(hist1, hist2):
-    """Compare two appearance embeddings using correlation (1.0 is perfect match)."""
+    """Compare two appearance embeddings using correlation."""
     if not hist1 or not hist2:
         return 0.0
     try:
@@ -217,38 +331,13 @@ def camera_transition_prior(previous_camera_id, current_camera_id):
         return 1.0
 
     transition_map = {
-        "CAM_ENTRY_01": {
-            "CAM_MAIN_01": 0.95,
-            "CAM_MAIN_02": 0.90,
-            "CAM_MAIN_03": 0.90,
-            "CAM_BILLING_01": 0.75,
-        },
-        "CAM_MAIN_01": {
-            "CAM_ENTRY_01": 0.90,
-            "CAM_MAIN_02": 0.88,
-            "CAM_MAIN_03": 0.88,
-            "CAM_BILLING_01": 0.85,
-        },
-        "CAM_MAIN_02": {
-            "CAM_ENTRY_01": 0.90,
-            "CAM_MAIN_01": 0.88,
-            "CAM_MAIN_03": 0.88,
-            "CAM_BILLING_01": 0.85,
-        },
-        "CAM_MAIN_03": {
-            "CAM_ENTRY_01": 0.90,
-            "CAM_MAIN_01": 0.88,
-            "CAM_MAIN_02": 0.88,
-            "CAM_BILLING_01": 0.85,
-        },
-        "CAM_BILLING_01": {
-            "CAM_ENTRY_01": 0.80,
-            "CAM_MAIN_01": 0.90,
-            "CAM_MAIN_02": 0.90,
-            "CAM_MAIN_03": 0.90,
-        },
+        "cam1": {"CAM1": 0.95, "CAM2": 0.90, "CAM5": 0.75, "PURPLLE_MUM_1076_CAM6": 0.75},
+        "cam2": {"CAM1": 0.90, "CAM2": 0.90, "CAM5": 0.75, "PURPLLE_MUM_1076_CAM6": 0.75},
+        "CAM1": {"cam1": 0.90, "CAM2": 0.88, "CAM5": 0.85},
+        "CAM2": {"cam1": 0.90, "CAM1": 0.88, "CAM5": 0.85, "PURPLLE_MUM_1076_CAM6": 0.85},
+        "CAM5": {"cam1": 0.80, "CAM1": 0.90, "CAM2": 0.90},
+        "PURPLLE_MUM_1076_CAM6": {"cam1": 0.80, "cam2": 0.80, "CAM2": 0.90},
     }
-
     return transition_map.get(previous_camera_id, {}).get(current_camera_id, 0.60)
 
 
@@ -258,18 +347,22 @@ def zone_transition_prior(previous_zone_id, current_zone_id):
         return 0.50
     if previous_zone_id == current_zone_id:
         return 1.0
-    if "ENTRY" in (previous_zone_id, current_zone_id):
+    if "ENTRY" in (previous_zone_id or "").upper() or "ENTRY" in (current_zone_id or "").upper():
         return 0.85
-    if "BILLING" in (previous_zone_id, current_zone_id):
+    if "BILLING" in (previous_zone_id or "").upper() or "BILLING" in (current_zone_id or "").upper():
         return 0.90
     return 0.80
 
+
+# ---------------------------------------------------------------------------
+# Cross-camera session tracker
+# ---------------------------------------------------------------------------
 
 class CrossCameraSessionTracker:
     def __init__(self, state_file="pipeline/session_state.json"):
         self.state_file = state_file
         self.sessions = {}
-        self.local_to_unified = {}  # track_id -> unified_id for the current video run
+        self.local_to_unified = {}
         self.load_state()
 
     def load_state(self):
@@ -293,7 +386,6 @@ class CrossCameraSessionTracker:
             print(f"Error saving cross-camera state: {e}")
 
     def is_reentry(self, unified_id, current_camera_id):
-        """Determine if visitor has been seen in another camera previously."""
         if unified_id in self.sessions:
             sess = self.sessions[unified_id]
             for cam in sess.get("camera_track_ids", {}):
@@ -302,31 +394,21 @@ class CrossCameraSessionTracker:
         return False
 
     def get_unified_id(
-        self,
-        track_id,
-        camera_id,
-        wx,
-        wy,
-        current_time,
-        is_staff_initial,
-        box=None,
-        frame=None,
-        zone_id=None,
-        current_track_ids=None,
+        self, track_id, camera_id, wx, wy, current_time, is_staff_initial,
+        box=None, frame=None, zone_id=None, current_track_ids=None,
     ):
-        """Maps a local camera track_id to a globally consistent unified visitor_id using spatial, temporal, and visual cues."""
+        """Maps a local camera track_id to a globally consistent unified visitor_id."""
         track_id = int(track_id)
         wx = float(wx)
         wy = float(wy)
-        # Calculate appearance embedding if crop is provided
+
         emb = None
         if box is not None and frame is not None:
             try:
                 x1, y1, x2, y2 = map(int, box)
                 h, w = frame.shape[:2]
-                crop = frame[max(0, y1) : min(h, y2), max(0, x1) : min(w, x2)]
+                crop = frame[max(0, y1): min(h, y2), max(0, x1): min(w, x2)]
                 if crop is not None and crop.size > 0:
-                    # Focus on the upper torso, which is usually the most stable clothing region.
                     torso_h = max(1, int(crop.shape[0] * 0.65))
                     crop = crop[:torso_h, :]
                 emb = compute_appearance_embedding(crop)
@@ -344,12 +426,9 @@ class CrossCameraSessionTracker:
                 sess["camera_track_ids"][camera_id] = track_id
                 if zone_id is not None:
                     sess["last_zone_id"] = zone_id
-
-                # Rolling update of visual embedding to handle camera angle / lighting changes
                 if emb is not None:
                     old_emb = sess.get("appearance_embedding")
                     if old_emb is not None:
-                        # 30% new visual signal, 70% rolling history
                         updated = (0.7 * np.array(old_emb) + 0.3 * np.array(emb)).tolist()
                         sess["appearance_embedding"] = updated
                     else:
@@ -357,7 +436,6 @@ class CrossCameraSessionTracker:
                     self.save_state()
             return unified_id
 
-        # Multi-signal match in previously exited/seen visitors from other cameras
         matched_id = None
         max_match_score = -1.0
         best_dist = float("inf")
@@ -366,13 +444,12 @@ class CrossCameraSessionTracker:
 
         for uid, sess in self.sessions.items():
             if sess["last_seen_camera"] == camera_id:
-                # If they are in the same camera, only match if their previous track ID is no longer active in the current frame
                 prev_track_id = sess.get("camera_track_ids", {}).get(camera_id)
                 if prev_track_id is not None and current_track_ids is not None:
                     if int(prev_track_id) in current_track_ids:
-                        continue  # Still actively tracking this person in the same camera, do not duplicate/hijack!
+                        continue
                 else:
-                    continue  # If we don't have track tracking, keep same camera skipped to avoid overlaps
+                    continue
 
             last_time_str = sess["last_seen_time"]
             try:
@@ -381,26 +458,17 @@ class CrossCameraSessionTracker:
                 continue
 
             diff = abs((current_time - last_time).total_seconds())
-            if diff <= 30.0:  # 30-second window
+            if diff <= 30.0:
                 lx, ly = sess["last_seen_x"], sess["last_seen_y"]
                 dist = np.sqrt((wx - lx) ** 2 + (wy - ly) ** 2)
 
-                if dist <= 150.0:  # 150-pixel spatial threshold (~2.5m)
-                    # 1. Spatial proximity score (higher is better)
+                if dist <= 150.0:
                     spatial_score = 1.0 - (dist / 150.0)
-
-                    # 2. Temporal closeness score
                     temporal_score = 1.0 - (diff / 30.0)
-
-                    # 3. Visual appearance correlation score
-                    app_score = 0.5  # Neutral default if visual embedding is missing
+                    app_score = 0.5
                     if emb is not None and sess.get("appearance_embedding") is not None:
                         app_score = compare_appearance(emb, sess["appearance_embedding"])
-
-                    # 4. Camera transition prior (same store traversal path)
                     cam_score = camera_transition_prior(sess["last_seen_camera"], camera_id)
-
-                    # 5. Zone compatibility prior
                     zone_score = zone_transition_prior(sess.get("last_zone_id"), zone_id)
 
                     feature_vec = build_identity_feature_vector(
@@ -413,7 +481,6 @@ class CrossCameraSessionTracker:
                         time_norm=diff / 30.0,
                     )
 
-                    # Unified multi-signal match score
                     heuristic_score = (
                         spatial_score * 0.30
                         + temporal_score * 0.22
@@ -436,17 +503,8 @@ class CrossCameraSessionTracker:
                         best_diff = diff
 
         if matched_id:
-            print(
-                f"🔗 [Re-ID Match] Track {track_id} in {camera_id} matched to {matched_id} (score: {max_match_score:.2f}, dist: {best_dist:.1f}px, gap: {best_diff:.1f}s)"
-            )
-            # Online learning: reinforce the selected match and penalize hard negatives.
-            for (
-                uid,
-                feature_vec,
-                match_score,
-                heuristic_score,
-                learned_prob,
-            ) in candidate_observations:
+            print(f"🔗 [Re-ID] Track {track_id} in {camera_id} → {matched_id} (score: {max_match_score:.2f})")
+            for (uid, feature_vec, match_score, _, _) in candidate_observations:
                 if uid == matched_id and match_score >= 0.65:
                     MODEL_REGISTRY.identity_model.update(feature_vec, 1)
                 elif match_score >= 0.60 and uid != matched_id:
@@ -462,22 +520,20 @@ class CrossCameraSessionTracker:
                 sess["last_zone_id"] = zone_id
             if emb is not None:
                 old_emb = sess.get("appearance_embedding")
-                if old_emb is not None:
-                    sess["appearance_embedding"] = (
-                        0.7 * np.array(old_emb) + 0.3 * np.array(emb)
-                    ).tolist()
-                else:
-                    sess["appearance_embedding"] = emb
+                sess["appearance_embedding"] = (
+                    (0.7 * np.array(old_emb) + 0.3 * np.array(emb)).tolist()
+                    if old_emb else emb
+                )
             self.save_state()
             return matched_id
         else:
-            # When no match is found, treat the strongest candidate as a negative example
             if candidate_observations:
                 top_candidate = max(candidate_observations, key=lambda item: item[2])
                 if top_candidate[2] >= 0.60:
                     MODEL_REGISTRY.identity_model.update(top_candidate[1], 0)
 
-            new_id = f"VIS_{track_id}"
+            # Build a Purplle-style ID token: ID_XXXXX
+            new_id = f"ID_{60000 + track_id}"
             base_new_id = new_id
             counter = 1
             while new_id in self.sessions:
@@ -500,6 +556,10 @@ class CrossCameraSessionTracker:
             return new_id
 
 
+# ---------------------------------------------------------------------------
+# Staff status hybrid classifier
+# ---------------------------------------------------------------------------
+
 def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_staff, tracker):
     """Hybrid visual-behavioral staff classifier with a lightweight learned model."""
     unified_is_staff_init = False
@@ -508,32 +568,20 @@ def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_st
         unified_is_staff_init = tracker.sessions[vid].get("is_staff", False)
         camera_count = len(tracker.sessions[vid].get("camera_track_ids", {}))
 
-    # Base visual score: black uniform detection is strong but can have reflections/noise
-    # We assign 0.6 for uniform match, 0.0 otherwise
     staff_score = 0.6 if is_clothing_staff or unified_is_staff_init else 0.0
 
-    # Behavioral boosts:
-    # 1. Physical location: Behind the billing register counter area (wx > 820)
-    if zone_id == "BILLING" and wx > 820:
+    is_billing_zone = zone_id and "BILLING" in (zone_id or "").upper()
+    if is_billing_zone and wx > 820:
         staff_score += 0.4
-
-    # 2. Queue Dwell: Standing in billing zone for > 90 seconds (staff stays at register; shoppers checkout and leave)
-    if zone_id == "BILLING":
+    if is_billing_zone:
         billing_duration = (current_time - sess["enter_time"]).total_seconds()
         if billing_duration > 90:
             staff_score += 0.3
 
-    # Torso match ratio is a strong signal in our store because staff uniforms are dark.
     torso_match_ratio = 1.0 if is_clothing_staff else 0.0
-
-    # 3. Store Dwell: Staff has much higher store presence duration than customers
-    total_duration = (
-        current_time - sess.get("first_seen_time", sess["enter_time"])
-    ).total_seconds()
+    total_duration = (current_time - sess.get("first_seen_time", sess["enter_time"])).total_seconds()
     if total_duration > 180:
         staff_score += 0.3
-
-    # 4. Multi-camera activity (staff moves across cameras over long shifts)
     if camera_count >= 2:
         staff_score += 0.2
 
@@ -541,45 +589,30 @@ def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_st
     feature_vec = build_staff_feature_vector(
         torso_match_ratio=torso_match_ratio,
         is_clothing_staff=is_clothing_staff,
-        zone_id=zone_id,
+        zone_id=zone_id or "",
         wx=wx,
-        billing_duration_sec=(current_time - sess["enter_time"]).total_seconds()
-        if zone_id == "BILLING"
-        else 0.0,
+        billing_duration_sec=(current_time - sess["enter_time"]).total_seconds() if is_billing_zone else 0.0,
         total_duration_sec=total_duration,
         camera_count=camera_count,
     )
     learned_prob = MODEL_REGISTRY.predict_staff_probability(feature_vec, fallback=heuristic_prob)
     combined_prob = (0.55 * learned_prob) + (0.45 * heuristic_prob)
 
-    # Robust multi-stage confidence resolve with hysteresis.
-    # Cold-start: rely on the conservative heuristic until the learned model has enough evidence.
     if MODEL_REGISTRY.staff_model.update_count < 5:
         if staff_score >= 0.6:
             is_staff = True
         elif staff_score < 0.4:
             is_staff = False
         else:
-            # Ambiguous band [0.4, 0.6): Resolve using spatiotemporal continuity
-            if total_duration > 120 or camera_count >= 2:
-                is_staff = True
-            else:
-                is_staff = False
+            is_staff = total_duration > 120 or camera_count >= 2
     else:
         if combined_prob >= 0.62:
-            # High confidence staff
             is_staff = True
         elif combined_prob < 0.38:
-            # High confidence customer
             is_staff = False
         else:
-            # Ambiguous band [0.4, 0.6): Resolve using spatiotemporal continuity
-            if total_duration > 120 or camera_count >= 2:
-                is_staff = True
-            else:
-                is_staff = False
+            is_staff = total_duration > 120 or camera_count >= 2
 
-    # Online learning: use high-confidence pseudo-labels to train the lightweight classifier.
     if combined_prob >= 0.80 or staff_score >= 1.2:
         MODEL_REGISTRY.staff_model.update(feature_vec, 1)
     elif combined_prob <= 0.20 or staff_score <= 0.15:
@@ -592,17 +625,133 @@ def update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_clothing_st
     return is_staff
 
 
+# ---------------------------------------------------------------------------
+# Event emission helpers
+# ---------------------------------------------------------------------------
+
 def post_event(event):
     """Posts a structured event to the FastAPI ingest endpoint."""
     try:
         response = requests.post(INGEST_URL, json=[event], timeout=2)
         if response.status_code == 207:
-            print(f"Event {event['event_type']} for VIS_{event['visitor_id']} ingested.")
+            body = response.json()
+            if body.get("ingested", 0) > 0:
+                print(f"✅ {event['event_type']} for {event.get('visitor_id', event.get('id_token', '?'))} ingested.")
         else:
-            print(f"Failed ingestion: {response.text}")
+            print(f"❌ Failed ingestion ({response.status_code}): {response.text[:120]}")
     except Exception as e:
         print(f"Connection error to ingest API: {e}")
 
+
+def make_entry_exit_event(event_type, vid, s_code, sid, camera_id, ts_str,
+                          is_staff, conf, group_id=None, group_size=None,
+                          gender="unknown", age=None, is_face_hidden=False):
+    """Emit a Purplle-format entry/exit event matching sample_events.jsonl."""
+    age_bucket = age_to_bucket(age) if age is not None else "unknown"
+    return {
+        "event_type": event_type,           # 'entry' or 'exit'
+        "id_token": vid,                    # e.g. ID_60001
+        "store_code": s_code,              # e.g. store_1008
+        "camera_id": camera_id,
+        "event_timestamp": ts_str,
+        "is_staff": is_staff,
+        "gender_pred": gender,
+        "age_pred": age,
+        "age_bucket": age_bucket,
+        "is_face_hidden": is_face_hidden,
+        "group_id": group_id,
+        "group_size": group_size,
+        # Also include scoring-harness compatible fields for /events/ingest
+        "event_id": str(uuid.uuid4()),
+        "store_id": sid,
+        "visitor_id": vid,
+        "timestamp": ts_str,
+        "zone_id": "ENTRY" if event_type == "entry" else "ENTRY",
+        "dwell_ms": 0,
+        "confidence": float(conf),
+        "metadata": {"queue_depth": None, "sku_zone": None, "session_seq": 1},
+    }
+
+
+def make_zone_event(event_type, track_id_int, vid, sid, camera_id, ts_str,
+                    zone_id, zone_name, zone_type, is_revenue_zone,
+                    hotspot_x, hotspot_y, is_staff, conf, dwell_ms=0,
+                    gender="unknown", age=None, sess_seq=1):
+    """Emit a Purplle-format zone_entered/zone_exited event."""
+    age_bucket = age_to_bucket(age) if age is not None else "unknown"
+    return {
+        "event_type": event_type,           # 'zone_entered' or 'zone_exited'
+        "track_id": track_id_int,
+        "store_id": sid,
+        "camera_id": camera_id,
+        "zone_id": zone_id,
+        "zone_name": zone_name or zone_id,
+        "zone_type": zone_type or "SHELF",
+        "is_revenue_zone": is_revenue_zone or "Yes",
+        "event_time": ts_str,
+        "zone_hotspot_x": round(hotspot_x, 1),
+        "zone_hotspot_y": round(hotspot_y, 1),
+        "gender": gender,
+        "age": age,
+        "age_bucket": age_bucket,
+        "is_staff": is_staff,
+        # Scoring-harness compat fields
+        "event_id": str(uuid.uuid4()),
+        "visitor_id": vid,
+        "timestamp": ts_str,
+        "dwell_ms": dwell_ms,
+        "confidence": float(conf),
+        "metadata": {"queue_depth": None, "sku_zone": zone_id, "session_seq": sess_seq},
+    }
+
+
+def make_queue_event(event_type, track_id_int, vid, sid, camera_id,
+                     zone_id, zone_name, queue_join_ts, queue_served_ts,
+                     queue_exit_ts, wait_seconds, queue_position, abandoned,
+                     hotspot_x, hotspot_y, gender="unknown", age=None):
+    """Emit a single Purplle queue lifecycle event (queue_completed / queue_abandoned)."""
+    age_bucket = age_to_bucket(age) if age is not None else "unknown"
+    return {
+        "queue_event_id": str(uuid.uuid4()),
+        "event_type": event_type,           # 'queue_completed' or 'queue_abandoned'
+        "track_id": track_id_int,
+        "store_id": sid,
+        "camera_id": camera_id,
+        "zone_id": zone_id,
+        "zone_name": zone_name or "Billing Counter Queue",
+        "zone_type": "BILLING",
+        "is_revenue_zone": "Yes",
+        "queue_join_ts": queue_join_ts,
+        "queue_served_ts": queue_served_ts,
+        "queue_exit_ts": queue_exit_ts,
+        "wait_seconds": int(wait_seconds),
+        "queue_position_at_join": int(queue_position),
+        "abandoned": abandoned,
+        "zone_hotspot_x": round(hotspot_x, 1),
+        "zone_hotspot_y": round(hotspot_y, 1),
+        "gender": gender,
+        "age": age,
+        "age_bucket": age_bucket,
+        "is_staff": False,
+        # Scoring-harness compat
+        "event_id": str(uuid.uuid4()),
+        "visitor_id": vid,
+        "timestamp": queue_exit_ts,
+        "zone_id": zone_id,
+        "dwell_ms": int(wait_seconds * 1000),
+        "confidence": 0.88,
+        "metadata": {
+            "queue_depth": queue_position,
+            "sku_zone": "BILLING",
+            "session_seq": 99,
+        },
+        "event_type_legacy": "BILLING_QUEUE_ABANDON" if abandoned else "BILLING_QUEUE_JOIN",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main detection loop
+# ---------------------------------------------------------------------------
 
 def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
     print(f"Initializing YOLO11 model: {model_path}")
@@ -612,19 +761,11 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
         print(f"Error: Video file {video_path} does not exist.")
         return
 
-    # Determine camera_id from file name
     base_name = os.path.basename(video_path)
-    camera_id = "CAM_MAIN_01"  # default
-    if "entry" in base_name:
-        camera_id = "CAM_ENTRY_01"
-    elif "billing" in base_name:
-        camera_id = "CAM_BILLING_01"
-    elif "main_floor_1" in base_name:
-        camera_id = "CAM_MAIN_01"
-    elif "main_floor_2" in base_name:
-        camera_id = "CAM_MAIN_02"
-    elif "main_floor_3" in base_name:
-        camera_id = "CAM_MAIN_03"
+
+    # Resolve camera + store from path
+    camera_id, sid, s_code, active_zones, s_camera_roles, cam_role = resolve_camera_id_and_store(video_path)
+    print(f"📹 Camera: {camera_id} | Store: {sid} ({s_code}) | Role: {cam_role}")
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -635,47 +776,45 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1920
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 1080
-    print(f"Processing {video_path} ({camera_id}) | FPS: {fps} | Total Frames: {frame_count}")
+    print(f"Processing {video_path} | FPS: {fps} | Frames: {frame_count} | {width}x{height}")
 
-    # Target resolution for fast in-memory downscaling
+    # Target resolution for fast inference
     target_w = 640
     target_h = int(height * (target_w / width))
     scale_x = width / target_w
     scale_y = height / target_h
 
-    # Frame skipping configuration to optimize CPU processing speed
     frame_skip = 3
     out_fps = fps / frame_skip
 
-    # Setup VideoWriter
     out_path = f"annotated_{base_name}"
     temp_out_path = f"temp_annotated_{base_name}"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(temp_out_path, fourcc, out_fps, (target_w, target_h))
-    print(f"Annotated temporary output will be saved to: {temp_out_path} ({target_w}x{target_h}) at {out_fps:.2f} FPS")
+    print(f"Annotated output: {temp_out_path}")
 
-    # Reset/clear cross-camera tracking state on entry camera run
+    # Reset cross-camera state on entry camera
     state_file = "pipeline/session_state.json"
-    if "entry" in base_name:
+    if cam_role == "entry":
         if os.path.exists(state_file):
             try:
                 os.remove(state_file)
-                print(f"Resetting cross-camera session state file: {state_file}")
+                print(f"↺ Resetting cross-camera session state: {state_file}")
             except Exception as e:
                 print(f"Error resetting state file: {e}")
 
     tracker = CrossCameraSessionTracker(state_file)
 
-    # Session states
-    # visitor_id -> { "current_zone", "enter_time", "first_seen_time", "last_seen", "dwell_sent_count", "seq", "is_staff" }
+    # Session states: visitor_id -> {current_zone, enter_time, ...}
     active_sessions = {}
-
-    # Track visitors who have fully exited, for REENTRY detection
-    # visitor_id -> True
+    # Historical exits for REENTRY detection
     historical_exits = {}
+    # Billing queue state: visitor_id -> {join_ts, position, hotspot_x, hotspot_y}
+    billing_queue: dict = {}
+    billing_queue_depth = 0
 
-    # Clip base start time shifted to 16:40:00 to align with POS transaction timestamps
-    base_time = datetime(2026, 4, 10, 16, 40, 0)
+    # Align clip start time to POS transaction window (Brigade Road, April 10 2026)
+    base_time = datetime(2026, 4, 10, 12, 0, 0)
 
     frame_num = 0
     while cap.isOpened():
@@ -685,34 +824,31 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
 
         frame_num += 1
 
-        # Write progress status (e.g. running) to pipeline/simulation_progress.json
         if frame_num % 5 == 0 or frame_num == frame_count:
             try:
                 with open("pipeline/simulation_progress.json", "w") as f:
-                    progress_data = {
+                    json.dump({
                         "video": base_name,
+                        "camera_id": camera_id,
+                        "store_id": sid,
                         "frame": frame_num,
                         "total": frame_count if frame_count > 0 else frame_num,
                         "percent": int((frame_num / frame_count) * 100) if frame_count > 0 else 0,
                         "status": "running"
-                    }
-                    json.dump(progress_data, f)
+                    }, f)
             except Exception:
                 pass
 
-        # Skip frames to cut down computing load (1 out of every 3 frames is processed)
         if frame_num % frame_skip != 0:
             continue
 
-        # In-memory resolution downscaling for fast inference
         frame = cv2.resize(frame, (target_w, target_h))
 
-        # Calculate current frame timestamp based on original frame count timeline
         offset_seconds = frame_num / fps
         current_time = base_time + timedelta(seconds=offset_seconds)
-        ts_str = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts_str = current_time.strftime("%Y-%m-%dT%H:%M:%S.000000")
+        ts_str_iso = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Run YOLO tracking on processed frames
         results = model.track(frame, persist=True, verbose=False)
 
         seen_tracks = set()
@@ -724,56 +860,37 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
             confidences = results[0].boxes.conf.cpu().numpy()
 
             for box, track_id, cls, conf in zip(boxes, track_ids, classes, confidences):
-                if cls == 0:  # Person
+                if cls == 0:  # Person class
                     seen_tracks.add(track_id)
                     x1, y1, x2, y2 = box
                     px = (x1 + x2) / 2.0
-                    py = y2  # foot position is bottom center
+                    py = y2  # foot position
 
-                    # Map to floor plan
                     wx, wy = map_camera_to_floor(px * scale_x, py * scale_y, camera_id, width, height)
-                    zone_id = determine_zone(wx, wy, camera_id)
+                    zone_id, zone_name, zone_type, is_revenue_zone = determine_zone(wx, wy, camera_id, active_zones)
                     is_staff_init = is_staff_heuristic(track_id, box, frame)
 
-                    # Get globally consistent unified visitor ID
                     vid = tracker.get_unified_id(
-                        track_id,
-                        camera_id,
-                        wx,
-                        wy,
-                        current_time,
-                        is_staff_init,
-                        box=box,
-                        frame=frame,
-                        zone_id=zone_id,
-                        current_track_ids=set(track_ids),
+                        track_id, camera_id, wx, wy, current_time,
+                        is_staff_init, box=box, frame=frame,
+                        zone_id=zone_id, current_track_ids=set(track_ids),
                     )
                     seen_vids.add(vid)
 
-                    # Get display staff flag dynamically
                     is_staff_display = is_staff_init
                     if vid in tracker.sessions:
                         is_staff_display = tracker.sessions[vid].get("is_staff", is_staff_init)
 
-                    # Draw bounding box and info on frame
+                    # Draw bounding box
                     color = (255, 0, 255) if is_staff_display else (0, 255, 0)
                     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
-                    label = f"{vid} | {zone_id or 'UNKNOWN'}"
+                    label = f"{vid} | {zone_id or 'FOH'}"
                     if is_staff_display:
                         label += " [STAFF]"
-                    cv2.putText(
-                        frame,
-                        label,
-                        (int(x1), max(10, int(y1) - 10)),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        color,
-                        2,
-                    )
+                    cv2.putText(frame, label, (int(x1), max(10, int(y1) - 10)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
 
-                    # Event logic (evaluate API posts only every 15 frames to reduce load, but track continuously)
                     if frame_num % 15 == 0:
-                        # Manage session states
                         if vid not in active_sessions:
                             active_sessions[vid] = {
                                 "current_zone": None,
@@ -783,178 +900,119 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                                 "dwell_sent_count": 0,
                                 "seq": 1,
                                 "is_staff": is_staff_init,
+                                "track_id_int": int(track_id),
+                                "last_hotspot_x": wx,
+                                "last_hotspot_y": wy,
+                                "gender": "unknown",
+                                "age": None,
                             }
 
-                            # Determine if this is a REENTRY or first ENTRY
-                            is_reentry = (vid in historical_exits) or tracker.is_reentry(
-                                vid, camera_id
-                            )
+                            is_reentry = (vid in historical_exits) or tracker.is_reentry(vid, camera_id)
                             is_staff = update_staff_status(
-                                vid,
-                                active_sessions[vid],
-                                current_time,
-                                zone_id,
-                                wx,
-                                wy,
-                                is_staff_init,
-                                tracker,
+                                vid, active_sessions[vid], current_time, zone_id, wx, wy, is_staff_init, tracker
                             )
                             active_sessions[vid]["is_staff"] = is_staff
 
-                            if is_reentry:
-                                # Visitor previously exited — emit REENTRY
-                                reentry_evt = {
-                                    "event_id": str(uuid.uuid4()),
-                                    "store_id": store_id,
-                                    "camera_id": camera_id,
-                                    "visitor_id": vid,
-                                    "event_type": "REENTRY",
-                                    "timestamp": ts_str,
-                                    "zone_id": "ENTRY" if camera_id == "CAM_ENTRY_01" else zone_id,
-                                    "dwell_ms": 0,
-                                    "is_staff": is_staff,
-                                    "confidence": float(conf),
-                                    "metadata": {
-                                        "queue_depth": None,
-                                        "sku_zone": None,
-                                        "session_seq": 1,
-                                    },
-                                }
-                                post_event(reentry_evt)
-                            else:
-                                # Brand new visitor — emit ENTRY
-                                entry_evt = {
-                                    "event_id": str(uuid.uuid4()),
-                                    "store_id": store_id,
-                                    "camera_id": camera_id,
-                                    "visitor_id": vid,
-                                    "event_type": "ENTRY",
-                                    "timestamp": ts_str,
-                                    "zone_id": "ENTRY" if camera_id == "CAM_ENTRY_01" else zone_id,
-                                    "dwell_ms": 0,
-                                    "is_staff": is_staff,
-                                    "confidence": float(conf),
-                                    "metadata": {
-                                        "queue_depth": None,
-                                        "sku_zone": None,
-                                        "session_seq": 1,
-                                    },
-                                }
+                            # Emit entry or reentry event (Purplle native format)
+                            if cam_role == "entry":
+                                evt_type = "exit" if is_reentry else "entry"
+                                entry_evt = make_entry_exit_event(
+                                    evt_type, vid, s_code, sid, camera_id, ts_str,
+                                    is_staff, float(conf),
+                                )
                                 post_event(entry_evt)
 
                         sess = active_sessions[vid]
                         sess["last_seen"] = current_time
-                        # Update staff status from latest detection (may improve over time)
-                        is_staff = update_staff_status(
-                            vid, sess, current_time, zone_id, wx, wy, is_staff_init, tracker
-                        )
+                        sess["last_hotspot_x"] = wx
+                        sess["last_hotspot_y"] = wy
+                        is_staff = update_staff_status(vid, sess, current_time, zone_id, wx, wy, is_staff_init, tracker)
                         sess["is_staff"] = is_staff
 
-                        # Check zone changes
+                        # Zone change detection
                         old_zone = sess["current_zone"]
                         if zone_id != old_zone:
                             # Exit old zone
                             if old_zone:
                                 sess["seq"] += 1
+                                old_zone_meta = next((z for z in active_zones if z["zone_id"] == old_zone), {})
+                                dwell_ms = int((current_time - sess["enter_time"]).total_seconds() * 1000)
 
-                                # If leaving BILLING zone to a non-EXIT zone: BILLING_QUEUE_ABANDON
-                                if old_zone == "BILLING" and zone_id not in (None, "EXIT"):
-                                    abandon_evt = {
-                                        "event_id": str(uuid.uuid4()),
-                                        "store_id": store_id,
-                                        "camera_id": camera_id,
-                                        "visitor_id": vid,
-                                        "event_type": "BILLING_QUEUE_ABANDON",
-                                        "timestamp": ts_str,
-                                        "zone_id": "BILLING",
-                                        "dwell_ms": int(
-                                            (current_time - sess["enter_time"]).total_seconds()
-                                            * 1000
-                                        ),
-                                        "is_staff": sess["is_staff"],
-                                        "confidence": float(conf),
-                                        "metadata": {
-                                            "queue_depth": None,
-                                            "sku_zone": "BILLING",
-                                            "session_seq": sess["seq"],
-                                        },
-                                    }
-                                    post_event(abandon_evt)
-                                    sess["seq"] += 1
-
-                                exit_evt = {
-                                    "event_id": str(uuid.uuid4()),
-                                    "store_id": store_id,
-                                    "camera_id": camera_id,
-                                    "visitor_id": vid,
-                                    "event_type": "ZONE_EXIT",
-                                    "timestamp": ts_str,
-                                    "zone_id": old_zone,
-                                    "dwell_ms": int(
-                                        (current_time - sess["enter_time"]).total_seconds() * 1000
-                                    ),
-                                    "is_staff": sess["is_staff"],
-                                    "confidence": float(conf),
-                                    "metadata": {
-                                        "queue_depth": None,
-                                        "sku_zone": None,
-                                        "session_seq": sess["seq"],
-                                    },
-                                }
-                                post_event(exit_evt)
+                                # Handle billing queue lifecycle
+                                is_billing_exit = old_zone_meta.get("zone_type") == "BILLING"
+                                if is_billing_exit and vid in billing_queue:
+                                    bq = billing_queue.pop(vid)
+                                    billing_queue_depth = max(0, billing_queue_depth - 1)
+                                    wait_secs = (current_time - bq["join_time"]).total_seconds()
+                                    # Abandoned if dwell < 60s in billing and didn't reach counter
+                                    abandoned = wait_secs < 60 or zone_id not in (None, "EXIT", "ENTRY")
+                                    q_evt = make_queue_event(
+                                        "queue_abandoned" if abandoned else "queue_completed",
+                                        sess["track_id_int"], vid, sid, camera_id,
+                                        old_zone, old_zone_meta.get("zone_name", "Billing Counter Queue"),
+                                        bq["join_ts"], None if abandoned else ts_str, ts_str,
+                                        wait_secs, bq["position"], abandoned,
+                                        bq["hotspot_x"], bq["hotspot_y"],
+                                        sess.get("gender", "unknown"), sess.get("age"),
+                                    )
+                                    post_event(q_evt)
+                                elif cam_role == "zone":
+                                    # Emit zone_exited
+                                    zone_exit_evt = make_zone_event(
+                                        "zone_exited", sess["track_id_int"], vid, sid, camera_id, ts_str,
+                                        old_zone, old_zone_meta.get("zone_name", old_zone),
+                                        old_zone_meta.get("zone_type", "SHELF"),
+                                        old_zone_meta.get("is_revenue_zone", "Yes"),
+                                        sess["last_hotspot_x"], sess["last_hotspot_y"],
+                                        is_staff, float(conf), dwell_ms, sess_seq=sess["seq"],
+                                    )
+                                    post_event(zone_exit_evt)
 
                             # Enter new zone
                             sess["current_zone"] = zone_id
                             sess["enter_time"] = current_time
                             sess["dwell_sent_count"] = 0
 
-                            if zone_id:
+                            if zone_id and cam_role == "zone":
                                 sess["seq"] += 1
-                                enter_type = "ZONE_ENTER"
-                                q_depth = None
-                                if zone_id == "BILLING":
-                                    enter_type = "BILLING_QUEUE_JOIN"
-                                    # Simulate queue depth: count number of other active sessions in billing
-                                    q_depth = sum(
-                                        1
-                                        for s in active_sessions.values()
-                                        if s["current_zone"] == "BILLING"
-                                    )
+                                zone_meta = next((z for z in active_zones if z["zone_id"] == zone_id), {})
 
-                                enter_evt = {
-                                    "event_id": str(uuid.uuid4()),
-                                    "store_id": store_id,
-                                    "camera_id": camera_id,
-                                    "visitor_id": vid,
-                                    "event_type": enter_type,
-                                    "timestamp": ts_str,
-                                    "zone_id": zone_id,
-                                    "dwell_ms": 0,
-                                    "is_staff": sess["is_staff"],
-                                    "confidence": float(conf),
-                                    "metadata": {
-                                        "queue_depth": q_depth,
-                                        "sku_zone": zone_id,
-                                        "session_seq": sess["seq"],
-                                    },
-                                }
+                                # Billing queue join tracking
+                                if zone_meta.get("zone_type") == "BILLING":
+                                    billing_queue_depth += 1
+                                    billing_queue[vid] = {
+                                        "join_time": current_time,
+                                        "join_ts": ts_str,
+                                        "position": billing_queue_depth,
+                                        "hotspot_x": wx,
+                                        "hotspot_y": wy,
+                                    }
+
+                                enter_evt = make_zone_event(
+                                    "zone_entered", sess["track_id_int"], vid, sid, camera_id, ts_str,
+                                    zone_id, zone_meta.get("zone_name", zone_id),
+                                    zone_meta.get("zone_type", "SHELF"),
+                                    zone_meta.get("is_revenue_zone", "Yes"),
+                                    wx, wy, is_staff, float(conf), 0, sess_seq=sess["seq"],
+                                )
                                 post_event(enter_evt)
 
                         else:
-                            # Still in the same zone, check continuous dwell (emit every 30s)
-                            if zone_id:
+                            # Same zone — emit ZONE_DWELL every 30s (scoring harness compat)
+                            if zone_id and cam_role == "zone":
                                 duration = (current_time - sess["enter_time"]).total_seconds()
                                 expected_dwells = int(duration // 30)
                                 if expected_dwells > sess["dwell_sent_count"]:
                                     sess["dwell_sent_count"] = expected_dwells
                                     sess["seq"] += 1
+                                    zone_meta = next((z for z in active_zones if z["zone_id"] == zone_id), {})
                                     dwell_evt = {
                                         "event_id": str(uuid.uuid4()),
-                                        "store_id": store_id,
+                                        "store_id": sid,
                                         "camera_id": camera_id,
                                         "visitor_id": vid,
                                         "event_type": "ZONE_DWELL",
-                                        "timestamp": ts_str,
+                                        "timestamp": ts_str_iso,
                                         "zone_id": zone_id,
                                         "dwell_ms": int(duration * 1000),
                                         "is_staff": sess["is_staff"],
@@ -967,67 +1025,78 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                                     }
                                     post_event(dwell_evt)
 
-        # Check for completed sessions (no longer seen for > 15 seconds) - run every 15 frames
+        # Check for completed sessions (not seen for > 15 seconds)
         if frame_num % 15 == 0:
             to_remove = []
             for vid, sess in active_sessions.items():
                 if vid not in seen_vids and (current_time - sess["last_seen"]).total_seconds() > 15:
                     to_remove.append(vid)
-
-                    # Post EXIT event — use stored is_staff from session, not hardcoded False
                     sess["seq"] += 1
-                    exit_evt = {
-                        "event_id": str(uuid.uuid4()),
-                        "store_id": store_id,
-                        "camera_id": camera_id,
-                        "visitor_id": vid,
-                        "event_type": "EXIT",
-                        "timestamp": ts_str,
-                        "zone_id": "ENTRY" if camera_id == "CAM_ENTRY_01" else sess["current_zone"],
-                        "dwell_ms": int((current_time - sess["enter_time"]).total_seconds() * 1000)
-                        if sess["current_zone"]
-                        else 0,
-                        "is_staff": sess["is_staff"],  # FIX: use session's tracked is_staff value
-                        "confidence": 0.9,
-                        "metadata": {
-                            "queue_depth": None,
-                            "sku_zone": None,
-                            "session_seq": sess["seq"],
-                        },
-                    }
-                    post_event(exit_evt)
-                    # Mark as historically exited for REENTRY detection
+
+                    # Handle any open billing queue sessions
+                    if vid in billing_queue:
+                        bq = billing_queue.pop(vid)
+                        billing_queue_depth = max(0, billing_queue_depth - 1)
+                        wait_secs = (current_time - bq["join_time"]).total_seconds()
+                        q_evt = make_queue_event(
+                            "queue_completed",
+                            sess["track_id_int"], vid, sid, camera_id,
+                            sess["current_zone"] or "BILLING", "Billing Counter Queue",
+                            bq["join_ts"], ts_str, ts_str,
+                            wait_secs, bq["position"], False,
+                            bq["hotspot_x"], bq["hotspot_y"],
+                        )
+                        post_event(q_evt)
+
+                    if cam_role == "entry":
+                        exit_evt = make_entry_exit_event(
+                            "exit", vid, s_code, sid, camera_id, ts_str_iso,
+                            sess["is_staff"], 0.90,
+                        )
+                        post_event(exit_evt)
+                    else:
+                        # Exit scoring-harness compat event
+                        exit_evt = {
+                            "event_id": str(uuid.uuid4()),
+                            "store_id": sid,
+                            "camera_id": camera_id,
+                            "visitor_id": vid,
+                            "event_type": "EXIT",
+                            "timestamp": ts_str_iso,
+                            "zone_id": sess.get("current_zone"),
+                            "dwell_ms": int((current_time - sess["enter_time"]).total_seconds() * 1000) if sess.get("current_zone") else 0,
+                            "is_staff": sess["is_staff"],
+                            "confidence": 0.90,
+                            "metadata": {"queue_depth": None, "sku_zone": None, "session_seq": sess["seq"]},
+                        }
+                        post_event(exit_evt)
+
                     historical_exits[vid] = True
 
             for vid in to_remove:
                 del active_sessions[vid]
 
-        # Write frame to video
         out.write(frame)
 
     cap.release()
     out.release()
-    print(f"Finished processing {video_path}")
+    print(f"✅ Finished processing {video_path}")
 
-    # Transcode temporary video to H.264 for web/browser compatibility
+    # Transcode to H.264 for browser compatibility
     if os.path.exists(temp_out_path):
         try:
-            print(f"Transcoding {temp_out_path} to H.264 using ffmpeg...")
+            print(f"Transcoding to H.264...")
             import subprocess
             cmd = [
-                "ffmpeg", "-y",
-                "-i", temp_out_path,
-                "-vcodec", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
-                "-an",
-                out_path
+                "ffmpeg", "-y", "-i", temp_out_path,
+                "-vcodec", "libx264", "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart", "-an", out_path
             ]
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"Transcoding complete. H.264 video saved to: {out_path}")
+            print(f"H.264 video saved to: {out_path}")
             os.remove(temp_out_path)
         except Exception as e:
-            print(f"Transcoding failed: {e}. Falling back to MPEG-4.")
+            print(f"Transcoding failed: {e}. Keeping MPEG-4.")
             if os.path.exists(out_path):
                 try:
                     os.remove(out_path)
@@ -1035,15 +1104,13 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                     pass
             os.rename(temp_out_path, out_path)
 
-    # Write final done status to simulation_progress.json
     try:
         with open("pipeline/simulation_progress.json", "w") as f:
             json.dump({
-                "video": base_name,
+                "video": base_name, "camera_id": camera_id, "store_id": sid,
                 "frame": frame_count if frame_count > 0 else frame_num,
                 "total": frame_count if frame_count > 0 else frame_num,
-                "percent": 100,
-                "status": "done"
+                "percent": 100, "status": "done"
             }, f)
         print("Simulation progress marked as done.")
     except Exception as e:
@@ -1052,6 +1119,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python detect.py <video_path>")
+        print("Usage: python detect.py <video_path> [model_path]")
     else:
-        run_detection(sys.argv[1])
+        model_p = sys.argv[2] if len(sys.argv) > 2 else "yolo11n.pt"
+        run_detection(sys.argv[1], model_p)

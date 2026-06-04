@@ -18,12 +18,27 @@ def parse_timestamp(ts_str):
 
 
 def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] = None):
-    # Calculate total store visitors based on Entry Camera (CAM_ENTRY_01)
+    # Entry cameras for this store (actual camera IDs)
+    ENTRY_CAMS = {
+        "ST1008": ["cam1", "CAM_ENTRY_01"],
+        "ST1076": ["cam1", "cam2", "CAM_ENTRY_01"],
+    }
+    entry_cams = ENTRY_CAMS.get(store_id, ["cam1", "CAM_ENTRY_01"])
+
+    # Entry event types (Purplle native + legacy)
+    ENTRY_EVENT_TYPES = ("ENTRY", "REENTRY", "entry", "reentry")
+    BILLING_EVENT_TYPES = (
+        "BILLING_QUEUE_JOIN", "BILLING_QUEUE_ABANDON",
+        "queue_completed", "queue_abandoned",
+    )
+    ZONE_DWELL_TYPES = ("ZONE_DWELL", "ZONE_EXIT", "zone_exited", "BILLING_QUEUE_JOIN", "queue_completed", "queue_abandoned")
+
+    # Calculate total store visitors based on entry cameras
     total_store_visitors = (
         db.query(DBEvent.visitor_id)
         .filter(
             DBEvent.store_id == store_id,
-            DBEvent.camera_id == "CAM_ENTRY_01",
+            DBEvent.camera_id.in_(entry_cams),
             DBEvent.is_staff.is_(False)
         )
         .distinct()
@@ -91,13 +106,13 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
     billing_visitor_ids = set()
 
     for vid, ev_list in active_sessions.items():
-        # Dwell time is calculated strictly based on events from the selected camera (or all events if camera_id is None)
+        # Dwell time calculation
         cam_events = [ev for ev in ev_list if ev.camera_id == camera_id] if camera_id else ev_list
         if cam_events:
             visits = []
             current_visit = []
             for ev in cam_events:
-                if ev.event_type in ("ENTRY", "REENTRY") and current_visit:
+                if ev.event_type in ENTRY_EVENT_TYPES and current_visit:
                     visits.append(current_visit)
                     current_visit = []
                 current_visit.append(ev)
@@ -111,13 +126,14 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
                     dwell_sec = (last_time - first_time).total_seconds()
                     total_dwell_seconds += max(dwell_sec, 0.0)
 
-        # Conversion checks use the shopper's full store session history
+        # Conversion: check billing zone events
         billing_visits = []
         for ev in ev_list:
-            if ev.zone_id == "BILLING" or ev.event_type in (
-                "BILLING_QUEUE_JOIN",
-                "BILLING_QUEUE_ABANDON",
-            ):
+            is_billing = (
+                (ev.zone_id and "BILLING" in (ev.zone_id or "").upper())
+                or ev.event_type in BILLING_EVENT_TYPES
+            )
+            if is_billing:
                 dt = parse_timestamp(ev.timestamp)
                 if dt:
                     billing_visits.append(dt)
@@ -144,14 +160,15 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
         avg_dwell_minutes = round((total_dwell_seconds / 60.0) / unique_visitors, 2)
 
     # Current Queue Depth
+    current_queue_depth = 0
     q_query = db.query(DBEvent).filter(
-        DBEvent.store_id == store_id, DBEvent.event_type == "BILLING_QUEUE_JOIN"
+        DBEvent.store_id == store_id,
+        DBEvent.event_type.in_(["BILLING_QUEUE_JOIN", "queue_completed", "queue_abandoned"])
     )
     if camera_id:
         q_query = q_query.filter(DBEvent.camera_id == camera_id)
     latest_queue_event = q_query.order_by(DBEvent.timestamp.desc()).first()
 
-    current_queue_depth = 0
     if latest_queue_event and latest_queue_event.metadata_json:
         try:
             meta = latest_queue_event.metadata_json
@@ -173,10 +190,9 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
     for ev in events:
         if ev.zone_id and ev.dwell_ms and ev.dwell_ms > 0:
             if ev.event_type in (
-                "ZONE_DWELL",
-                "ZONE_EXIT",
-                "BILLING_QUEUE_JOIN",
-                "BILLING_QUEUE_ABANDON",
+                "ZONE_DWELL", "ZONE_EXIT",
+                "BILLING_QUEUE_JOIN", "BILLING_QUEUE_ABANDON",
+                "zone_exited", "queue_completed", "queue_abandoned",
             ):
                 if ev.zone_id not in zone_dwell_secs:
                     zone_dwell_secs[ev.zone_id] = []
