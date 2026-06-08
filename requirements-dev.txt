@@ -269,4 +269,4 @@ wheel==0.47.0
 # The following packages are considered to be unsafe in a requirements file:
 # pip
 # setuptools
-scikit-learn==1.4.1.post1
+scikit-learn==1.4.2

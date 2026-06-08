@@ -22,16 +22,8 @@ build/
 *-wal
 *-shm
 
-# Model weights and state (large binary — download separately or dynamically generated)
-
-*.onnx
-*.pkl
-
-# CCTV footage (large media files — not for version control)
 
 
-# Annotated output videos from pipeline
-annotated_*.avi
 
 # MacOS
 .DS_Store
@@ -66,3 +58,8 @@ logs/
 pipeline/session_state.json
 session_state.json
 *.zip
+
+# SQLite database (do not commit production data)
+*.db
+*.db-wal
+*.db-shm

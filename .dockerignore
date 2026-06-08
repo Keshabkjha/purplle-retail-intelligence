@@ -1,0 +1,36 @@
+# .dockerignore
+# Prevents sensitive and large files from being shipped in the container image
+
+# CCTV footage (large media — should be mounted at runtime, not baked in)
+*.mp4
+*.avi
+annotated_*
+
+# Cross-camera session state (contains visitor appearance embeddings — biometric data)
+pipeline/session_state.json
+pipeline/simulation_progress.json
+
+# SQLite database (production data — should be mounted as a volume)
+*.db
+*.db-wal
+*.db-shm
+
+# Model state (large binary files — download or mount separately)
+pipeline/model_state/
+
+# Dev and test artifacts
+.pytest_cache/
+.coverage
+coverage.xml
+coverage_out.txt
+.ruff_cache/
+.mypy_cache/
+tests/
+.github/
+
+# Documentation and challenge assets
+docs/
+*.pdf
+
+# OS artifacts
+.DS_Store

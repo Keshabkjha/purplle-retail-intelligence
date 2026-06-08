@@ -1,4 +1,6 @@
+import glob
 import json
+import logging
 import os
 import sys
 import time
@@ -25,6 +27,33 @@ from app.metrics import get_store_metrics_data, parse_timestamp
 from app.models import EventSchema, canonical_event_type
 from app.pos_loader import load_pos_csv
 
+logger = logging.getLogger(__name__)
+
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ALLOWED_VIDEO_DIRS = ["Store 1", "Store 2", "CCTV Footage"]
+
+
+def _safe_video_path(video_name: str, prefix: str = "") -> Optional[str]:
+    """Resolve a video filename to an absolute path that is strictly inside _BASE_DIR.
+    
+    Returns the resolved path or None if the name is unsafe / not found.
+    Defends against path traversal by checking that the resolved path starts
+    with the known base directory (os.path.abspath boundary check).
+    """
+    # Strip directory components supplied by the user
+    safe_name = os.path.basename(video_name)
+    if not safe_name or safe_name in (".", ".."):
+        return None
+    filename = f"{prefix}{safe_name}" if prefix else safe_name
+    for d in _ALLOWED_VIDEO_DIRS:
+        candidate = os.path.normpath(os.path.join(_BASE_DIR, d, filename))
+        # Boundary check: resolved path must be inside base_dir
+        if not candidate.startswith(_BASE_DIR + os.sep):
+            continue
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,10 +67,12 @@ MAX_INGEST_BATCH = int(os.getenv("MAX_INGEST_BATCH", "500"))
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "0"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
 
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 ALLOWED_ORIGINS = [
     origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()
-] or ["*"]
+]
+if not ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:8000"]
 
 
 class RateLimiter:
@@ -245,7 +276,8 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
         # Validate event schema manually using Pydantic
         try:
             event = EventSchema.model_validate(event_data)
-        except Exception:
+        except Exception as validation_exc:
+            logger.warning("Schema validation failed for event_id=%s: %s", event_id, type(validation_exc).__name__)
             errors.append({"event_id": event_id, "error": "Schema validation failed"})
             continue
 
@@ -310,8 +342,9 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
             db.rollback()
             # If unique constraint triggered but didn't catch in query
             success_count += 1
-        except Exception:
+        except Exception as ingest_exc:
             db.rollback()
+            logger.error("Failed to ingest event_id=%s: %s", event.event_id, type(ingest_exc).__name__)
             errors.append({"event_id": event.event_id, "error": "Failed to ingest event"})
 
     return {"ingested": success_count, "failed": len(errors), "errors": errors}
@@ -327,9 +360,10 @@ def get_store_metrics(store_id: str, camera_id: Optional[str] = None, db: Sessio
     try:
         return get_store_metrics_data(store_id, db, camera_id)
     except Exception as e:
+        logger.error("Failed to calculate store metrics for store_id=%s: %s", store_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to calculate store metrics: {str(e)}",
+            detail="Failed to calculate store metrics.",
         )
 
 
@@ -338,9 +372,10 @@ def get_store_funnel(store_id: str, camera_id: Optional[str] = None, db: Session
     try:
         return get_store_funnel_data(store_id, db, camera_id)
     except Exception as e:
+        logger.error("Failed to calculate store funnel for store_id=%s: %s", store_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to calculate store funnel: {str(e)}",
+            detail="Failed to calculate store funnel.",
         )
 
 
@@ -349,9 +384,10 @@ def get_store_heatmap(store_id: str, camera_id: Optional[str] = None, db: Sessio
     try:
         return get_store_heatmap_data(store_id, db, camera_id)
     except Exception as e:
+        logger.error("Failed to calculate store heatmap for store_id=%s: %s", store_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to calculate store heatmap: {str(e)}",
+            detail="Failed to calculate store heatmap.",
         )
 
 
@@ -426,9 +462,10 @@ def get_store_anomalies(store_id: str, db: Session = Depends(get_db)):
     try:
         return get_store_anomalies_data(store_id, db)
     except Exception as e:
+        logger.error("Failed to calculate store anomalies for store_id=%s: %s", store_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to calculate store anomalies: {str(e)}",
+            detail="Failed to calculate store anomalies.",
         )
 
 
@@ -533,9 +570,13 @@ def load_pos_data(
     Filters out Purplle loyalty card scans (amount = 0).
     Idempotent — safe to call multiple times.
     """
-    import glob
-    # Find POS CSV file in project root
-    pos_files = glob.glob("POS*.csv") + glob.glob("pos*.csv") + glob.glob("*transactions*.csv")
+    # Find POS CSV file anchored to the project root (not CWD) to prevent path injection
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pos_files = (
+        glob.glob(os.path.join(base_dir, "POS*.csv"))
+        + glob.glob(os.path.join(base_dir, "pos*.csv"))
+        + glob.glob(os.path.join(base_dir, "*transactions*.csv"))
+    )
     if not pos_files:
         raise HTTPException(status_code=404, detail="No POS CSV file found in project root. Expected 'POS - sample transactions.csv' or similar.")
 
@@ -625,66 +666,45 @@ def send_bytes_range_requests(file_path: str, range_header: str):
 def stream_video(video_name: str, request: Request):
     """Serves the raw video file supporting partial content range requests."""
     from fastapi.responses import FileResponse
-    import os
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    search_dirs = ["Store 1", "Store 2", "CCTV Footage"]
-    filepath = None
-    for d in search_dirs:
-        p = os.path.join(base_dir, d, os.path.basename(video_name))
-        if os.path.exists(p):
-            filepath = p
-            break
-            
+    # _safe_video_path enforces abspath boundary check against _BASE_DIR
+    filepath = _safe_video_path(video_name)
     if not filepath:
         raise HTTPException(status_code=404, detail="Video not found")
-        
+
     range_header = request.headers.get("range")
     if range_header:
         try:
             return send_bytes_range_requests(filepath, range_header)
         except Exception as e:
-            print(f"Range request failed: {e}")
-            
+            logger.warning("Range request failed for %s: %s", video_name, type(e).__name__)
+
     return FileResponse(filepath, media_type="video/mp4")
 
 
 @app.get("/api/annotated_exists/{video_name}")
 def check_annotated_exists(video_name: str):
     """Checks if the annotated video file exists."""
-    import os
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    search_dirs = [".", "Store 1", "Store 2", "CCTV Footage"]
-    for d in search_dirs:
-        filepath = os.path.join(base_dir, d, f"annotated_{os.path.basename(video_name)}")
-        if os.path.exists(filepath):
-            return {"exists": True}
-    return {"exists": False}
+    # _safe_video_path with prefix enforces abspath boundary check
+    filepath = _safe_video_path(video_name, prefix="annotated_")
+    return {"exists": filepath is not None}
 
 
 @app.get("/api/annotated_stream/{video_name}")
 def stream_annotated_video(video_name: str, request: Request):
     """Serves the annotated video file from the root directory supporting partial content range requests."""
     from fastapi.responses import FileResponse
-    import os
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    search_dirs = [".", "Store 1", "Store 2", "CCTV Footage"]
-    filepath = None
-    for d in search_dirs:
-        p = os.path.join(base_dir, d, f"annotated_{os.path.basename(video_name)}")
-        if os.path.exists(p):
-            filepath = p
-            break
-            
+    # _safe_video_path with prefix enforces abspath boundary check
+    filepath = _safe_video_path(video_name, prefix="annotated_")
     if not filepath:
         raise HTTPException(status_code=404, detail="Annotated video not found")
-        
+
     range_header = request.headers.get("range")
     if range_header:
         try:
             return send_bytes_range_requests(filepath, range_header)
         except Exception as e:
-            print(f"Range request failed: {e}")
-            
+            logger.warning("Range request failed for annotated %s: %s", video_name, type(e).__name__)
+
     return FileResponse(filepath, media_type="video/mp4")
 
 

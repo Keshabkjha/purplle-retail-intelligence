@@ -591,8 +591,18 @@
     </footer>
 
     <script>
+        function escapeHtml(unsafe) {
+            if (unsafe == null) return '';
+            return String(unsafe)
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
         const storeId = new URLSearchParams(window.location.search).get("store_id") || "ST1008";
-        document.getElementById("store-id-display").textContent = storeId;
+        document.getElementById("store-id-display").textContent = escapeHtml(storeId);
         const seenEventIds = new Set();
         let conversionChart = null;
         let abandonChart = null;
@@ -1033,7 +1043,7 @@
             });
             
             if (filtered.length === 0) {
-                feedContainer.innerHTML = `<div class="text-slate-600">// No ${feedFilter} events yet...</div>`;
+                feedContainer.innerHTML = `<div class="text-slate-600">// No ${escapeHtml(feedFilter)} events yet...</div>`;
                 return;
             }
             
@@ -1048,29 +1058,33 @@
             if (ev.timestamp) { try { timeStr = new Date(ev.timestamp).toLocaleTimeString(); } catch(e) {} }
 
             let displayType = 'EVENT', color = 'text-indigo-400', messageText = '';
-            const eventType = ev.event_type;
+            const eventType = escapeHtml(ev.event_type);
+            const sVid = escapeHtml(ev.visitor_id?.substring(0,10));
+            const sZone = escapeHtml(ev.zone_id);
+            const sCam = escapeHtml(ev.camera_id);
+            const sQDepth = escapeHtml(ev.metadata?.queue_depth || 1);
 
             if (eventType === 'ZONE_DWELL' || eventType === 'DWELL' || eventType === 'ZONE_ENTER' || eventType === 'zone_entered' || eventType === 'zone_exited') {
                 displayType = 'DWELL'; color = 'text-emerald-400';
-                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} in ${ev.zone_id} (${(ev.dwell_ms/1000).toFixed(0)}s)`;
+                messageText = `Visitor ${sVid} in ${sZone} (${(ev.dwell_ms/1000).toFixed(0)}s)`;
             } else if (eventType === 'BILLING_QUEUE_JOIN' || eventType === 'queue_completed') {
                 displayType = 'QUEUE'; color = 'text-amber-400';
-                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} joined Checkout Queue (depth: ${ev.metadata?.queue_depth || 1})`;
+                messageText = `Visitor ${sVid} joined Checkout Queue (depth: ${sQDepth})`;
             } else if (eventType === 'BILLING_QUEUE_ABANDON' || eventType === 'queue_abandoned') {
                 displayType = 'ABANDON'; color = 'text-rose-400';
-                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} abandoned Checkout Queue`;
+                messageText = `Visitor ${sVid} abandoned Checkout Queue`;
             } else if (eventType === 'REENTRY') {
                 displayType = 'REENTRY'; color = 'text-cyan-400';
-                messageText = `Cross-Camera Re-ID: Visitor ${ev.visitor_id?.substring(0,10)} re-entered`;
+                messageText = `Cross-Camera Re-ID: Visitor ${sVid} re-entered`;
             } else if (eventType === 'ENTRY' || eventType === 'entry') {
                 displayType = 'ENTRY'; color = 'text-indigo-400';
-                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} entered via ${ev.camera_id}`;
+                messageText = `Visitor ${sVid} entered via ${sCam}`;
             } else if (eventType === 'EXIT' || eventType === 'exit') {
                 displayType = 'EXIT'; color = 'text-slate-400';
-                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} exited (${ev.zone_id})`;
+                messageText = `Visitor ${sVid} exited (${sZone})`;
             } else {
                 displayType = 'TRACK'; color = 'text-indigo-400';
-                messageText = `Visitor ${ev.visitor_id?.substring(0,10)} at ${ev.camera_id} → ${ev.zone_id}`;
+                messageText = `Visitor ${sVid} at ${sCam} → ${sZone}`;
             }
             if (ev.is_staff) messageText += ` [STAFF]`;
 
@@ -1320,17 +1334,18 @@
                             // Update Tooltip
                             const ttEl = document.getElementById(`tt-${z.zone_id}`);
                             if (ttEl) {
-                                ttEl.innerHTML = `<span class="text-accentBlue font-bold">${z.visit_count} visits</span> <br> Avg dwell: ${z.average_dwell_seconds}s`;
+                                ttEl.innerHTML = `<span class="text-accentBlue font-bold">${escapeHtml(z.visit_count)} visits</span> <br> Avg dwell: ${escapeHtml(z.average_dwell_seconds)}s`;
                             }
                         }
 
+                        const sZone = escapeHtml(z.zone_id).replace(/_/g, ' ');
                         const itemHtml = `
                             <div class="p-3 bg-white/5 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-300 flex flex-col gap-1.5">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-xs font-bold text-slate-200">${z.zone_id.replace(/_/g, ' ')}</span>
+                                    <span class="text-xs font-bold text-slate-200">${sZone}</span>
                                     <div class="flex items-center gap-3 text-[10px] font-semibold text-slate-400">
-                                        <span>Visits: <strong class="text-white">${z.visit_count}</strong></span>
-                                        <span>Dwell: <strong class="text-white">${z.average_dwell_seconds}s</strong></span>
+                                        <span>Visits: <strong class="text-white">${escapeHtml(z.visit_count)}</strong></span>
+                                        <span>Dwell: <strong class="text-white">${escapeHtml(z.average_dwell_seconds)}s</strong></span>
                                     </div>
                                 </div>
                                 <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
@@ -1367,15 +1382,20 @@
                             severityClass = 'bg-amber-500/15 text-amber-400';
                         }
 
+                        const sAnomalyType = escapeHtml(an.anomaly_type).replace(/_/g, ' ');
+                        const sSeverity = escapeHtml(an.severity);
+                        const sDetails = escapeHtml(an.details);
+                        const sAction = escapeHtml(an.suggested_action);
+
                         const cardHtml = `
                             <div class="p-5 bg-white/5 border border-white/5 ${borderClass} border-l-4 rounded-r-xl flex flex-col gap-3 transition-all duration-300 hover:bg-white/10">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-xs font-bold text-white uppercase tracking-wider">${an.anomaly_type.replace(/_/g, ' ')}</span>
-                                    <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${severityClass}">${an.severity}</span>
+                                    <span class="text-xs font-bold text-white uppercase tracking-wider">${sAnomalyType}</span>
+                                    <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${severityClass}">${sSeverity}</span>
                                 </div>
-                                <p class="text-sm font-semibold text-slate-300 leading-relaxed">${an.details}</p>
+                                <p class="text-sm font-semibold text-slate-300 leading-relaxed">${sDetails}</p>
                                 <div class="mt-2 text-xs font-semibold text-slate-200 bg-white/5 border border-white/5 px-3 py-2 rounded-lg flex items-center gap-2">
-                                    <i data-lucide="wrench" class="w-3.5 h-3.5 text-accentBlue"></i> suggested_action: ${an.suggested_action}
+                                    <i data-lucide="wrench" class="w-3.5 h-3.5 text-accentBlue"></i> suggested_action: ${sAction}
                                 </div>
                             </div>
                         `;
@@ -1440,9 +1460,11 @@
                     card.onclick = () => {
                         enterCameraMode(cam.camera_id, cam.display_name, cam.video_file);
                     };
+                    const sCamName = escapeHtml(cam.display_name);
+                    const sCamVis = escapeHtml(cam.visitor_count);
                     card.innerHTML = `
-                        <span class="text-[10px] font-bold uppercase tracking-wider truncate w-full">${cam.display_name}</span>
-                        <span class="text-xl font-extrabold font-mono">${cam.visitor_count}</span>
+                        <span class="text-[10px] font-bold uppercase tracking-wider truncate w-full">${sCamName}</span>
+                        <span class="text-xl font-extrabold font-mono">${sCamVis}</span>
                         <span class="text-[9px] ${cam.is_processed ? 'text-accentGreen' : 'text-slate-600'} font-semibold uppercase">
                             ${cam.is_processed ? '● Live' : '○ Not Run'}
                         </span>
@@ -1497,18 +1519,23 @@
                         ? `<span class="text-[9px] text-slate-500">Last: ${new Date(cam.last_processed).toLocaleTimeString()}</span>`
                         : '';
 
+                    const sCamNameModal = escapeHtml(cam.display_name);
+                    const sCamVisModal = escapeHtml(cam.visitor_count);
+                    const sCamEvModal = escapeHtml(cam.event_count);
+                    const sCamIcon = escapeHtml(cam.icon);
+
                     card.innerHTML = `
                         <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
-                            <i data-lucide="${cam.icon}" class="w-5 h-5"></i>
+                            <i data-lucide="${sCamIcon}" class="w-5 h-5"></i>
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="text-sm font-bold text-white">${cam.display_name}</span>
+                                <span class="text-sm font-bold text-white">${sCamNameModal}</span>
                                 ${statusBadge}
                             </div>
                             <div class="flex items-center gap-3 mt-1">
-                                <span class="text-xs text-slate-400">👥 ${cam.visitor_count} visitors</span>
-                                <span class="text-xs text-slate-500">${cam.event_count} events</span>
+                                <span class="text-xs text-slate-400">👥 ${sCamVisModal} visitors</span>
+                                <span class="text-xs text-slate-500">${sCamEvModal} events</span>
                                 ${lastProcessed}
                             </div>
                         </div>

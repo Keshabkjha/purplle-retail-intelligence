@@ -25,6 +25,11 @@ def patched_load(*args, **kwargs):
 
 torch.load = patched_load
 
+# Add project root to sys.path to allow direct execution via `python3 pipeline/detect.py`
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from pipeline.adaptive_models import (  # noqa: E402
     AdaptiveModelRegistry,
     build_identity_feature_vector,
@@ -637,7 +642,10 @@ def post_event(event):
         if response.status_code == 207:
             body = response.json()
             if body.get("ingested", 0) > 0:
-                print(f"✅ {event['event_type']} for {event.get('visitor_id', event.get('id_token', '?'))} ingested.")
+                raw_vid = event.get('visitor_id', event.get('id_token', '?'))
+                # Mask PII: show only first 4 chars + *** to prevent clear-text logging of Re-ID tokens
+                masked_vid = (raw_vid[:4] + "***") if isinstance(raw_vid, str) and len(raw_vid) > 4 else "****"
+                print(f"✅ {event['event_type']} for {masked_vid} ingested.")
         else:
             print(f"❌ Failed ingestion ({response.status_code}): {response.text[:120]}")
     except Exception as e:

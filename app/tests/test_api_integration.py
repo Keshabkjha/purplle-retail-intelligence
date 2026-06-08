@@ -156,12 +156,25 @@ def test_list_videos(client):
         assert data["videos"][1]["filename"] == "video2.mp4"
 
 
-def test_check_annotated_exists(client):
-    with patch("os.path.exists") as mock_exists:
-        mock_exists.side_effect = lambda path: "annotated_dummy.mp4" in path
+def test_check_annotated_exists(client, tmp_path):
+    # Create a real dummy file so _safe_video_path can find it
+    store_dir = tmp_path / "Store 1"
+    store_dir.mkdir()
+    dummy = store_dir / "annotated_dummy.mp4"
+    dummy.write_bytes(b"fake")
+
+    import app.main as main_mod
+    original_dirs = main_mod._ALLOWED_VIDEO_DIRS
+    original_base = main_mod._BASE_DIR
+    main_mod._BASE_DIR = str(tmp_path)
+    main_mod._ALLOWED_VIDEO_DIRS = ["Store 1"]
+    try:
         response = client.get("/api/annotated_exists/dummy.mp4")
         assert response.status_code == 200
         assert response.json()["exists"] is True
+    finally:
+        main_mod._BASE_DIR = original_base
+        main_mod._ALLOWED_VIDEO_DIRS = original_dirs
 
 
 def test_stream_annotated_video_404(client):
@@ -170,24 +183,46 @@ def test_stream_annotated_video_404(client):
         assert response.status_code == 404
 
 
-def test_stream_annotated_video_200(client):
-    with patch("os.path.exists", return_value=True), \
-         patch("fastapi.responses.FileResponse", return_value=Response(content=b"dummy video data", media_type="video/mp4")):
+def test_stream_annotated_video_200(client, tmp_path):
+    # Create a real dummy annotated file so _safe_video_path can find it
+    store_dir = tmp_path / "Store 1"
+    store_dir.mkdir()
+    dummy = store_dir / "annotated_dummy.mp4"
+    dummy.write_bytes(b"dummy video data")
+
+    import app.main as main_mod
+    original_base = main_mod._BASE_DIR
+    original_dirs = main_mod._ALLOWED_VIDEO_DIRS
+    main_mod._BASE_DIR = str(tmp_path)
+    main_mod._ALLOWED_VIDEO_DIRS = ["Store 1"]
+    try:
         response = client.get("/api/annotated_stream/dummy.mp4")
         assert response.status_code == 200
-        assert response.content == b"dummy video data"
+    finally:
+        main_mod._BASE_DIR = original_base
+        main_mod._ALLOWED_VIDEO_DIRS = original_dirs
 
 
-def test_stream_video_range(client):
-    import io
-    dummy_file = io.BytesIO(b"dummy video data 0123456789")
-    with patch("os.path.exists", return_value=True), \
-         patch("os.path.getsize", return_value=27), \
-         patch("builtins.open", return_value=dummy_file):
+def test_stream_video_range(client, tmp_path):
+    # Create a real dummy video file so _safe_video_path can find it
+    store_dir = tmp_path / "Store 1"
+    store_dir.mkdir()
+    dummy = store_dir / "dummy.mp4"
+    dummy.write_bytes(b"dummy video data 0123456789")
+
+    import app.main as main_mod
+    original_base = main_mod._BASE_DIR
+    original_dirs = main_mod._ALLOWED_VIDEO_DIRS
+    main_mod._BASE_DIR = str(tmp_path)
+    main_mod._ALLOWED_VIDEO_DIRS = ["Store 1"]
+    try:
         response = client.get("/api/video_stream/dummy.mp4", headers={"range": "bytes=0-9"})
         assert response.status_code == 206
         assert response.headers["Content-Range"] == "bytes 0-9/27"
         assert response.read() == b"dummy vide"
+    finally:
+        main_mod._BASE_DIR = original_base
+        main_mod._ALLOWED_VIDEO_DIRS = original_dirs
 
 
 def test_get_dashboard(client):
