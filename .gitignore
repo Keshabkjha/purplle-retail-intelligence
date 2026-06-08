@@ -61,9 +61,6 @@ htmlcov/
 *.log
 logs/
 
-# Challenge PDFs and datasets (keep in your local workspace)
-*.pdf
-*.xlsx
 
 # Transient state files
 pipeline/session_state.json
