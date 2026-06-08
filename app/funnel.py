@@ -1,10 +1,10 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from app.database import DBPOS, DBEvent
-from app.metrics import parse_timestamp
+from app.metrics import get_entry_camera_ids, parse_timestamp
 
 
 def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] = None):
@@ -41,10 +41,8 @@ def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] =
         if dt:
             txn_times.append(dt)
 
-    # Determine the set of visitor IDs who entered the store via Entry Camera (CAM_ENTRY_01)
-    entry_vids = {
-        ev.visitor_id for ev in all_events if ev.camera_id == "CAM_ENTRY_01"
-    }
+    entry_cams = get_entry_camera_ids(store_id)
+    entry_vids = {ev.visitor_id for ev in all_events if ev.camera_id in entry_cams}
     # Fallback to all visitor IDs if no entry camera events are found yet
     if not entry_vids:
         entry_vids = set(sessions.keys())
@@ -62,6 +60,7 @@ def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] =
     zone_visit_count = 0
     billing_queue_count = 0
     purchase_count = 0
+    visitor_billing_times = {}
 
     for vid in active_vids:
         ev_list = sessions[vid]
@@ -81,6 +80,8 @@ def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] =
             if ev.zone_id == "BILLING" or ev.event_type in (
                 "BILLING_QUEUE_JOIN",
                 "BILLING_QUEUE_ABANDON",
+                "queue_completed",
+                "queue_abandoned",
             ):
                 has_visited_billing = True
                 dt = parse_timestamp(ev.timestamp)
@@ -88,18 +89,27 @@ def get_store_funnel_data(store_id: str, db: Session, camera_id: Optional[str] =
                     billing_visits.append(dt)
         if has_visited_billing:
             billing_queue_count += 1
+            visitor_billing_times[vid] = billing_visits
 
-        is_converted = False
-        if has_visited_billing:
-            for b_time in billing_visits:
-                for t_time in txn_times:
-                    if b_time <= t_time <= b_time + timedelta(minutes=5):
-                        is_converted = True
-                        break
-                if is_converted:
-                    break
-        if is_converted:
-            purchase_count += 1
+    converted_visitors = set()
+    consumed_txns = set()
+    sorted_visitors = sorted(
+        visitor_billing_times.items(),
+        key=lambda item: (min(item[1]) if item[1] else datetime.max, item[0]),
+    )
+    for vid, billing_visits in sorted_visitors:
+        matched_txn_idx = None
+        for t_idx, t_time in enumerate(txn_times):
+            if t_idx in consumed_txns:
+                continue
+            if any(b_time <= t_time <= b_time + timedelta(minutes=5) for b_time in billing_visits):
+                matched_txn_idx = t_idx
+                break
+        if matched_txn_idx is not None:
+            converted_visitors.add(vid)
+            consumed_txns.add(matched_txn_idx)
+
+    purchase_count = len(converted_visitors)
 
     entry_to_zone = 0.0
     if entry_count > 0:

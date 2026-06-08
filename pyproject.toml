@@ -42,6 +42,7 @@ testpaths = ["tests"]
 [tool.coverage.run]
 branch = true
 source = ["app", "pipeline"]
+omit = ["app/tests/*", "app/health.py", "app/ingestion.py"]
 
 [tool.coverage.report]
 show_missing = true

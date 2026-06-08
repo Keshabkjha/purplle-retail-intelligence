@@ -22,7 +22,7 @@ from app.database import DBPOS, DBEvent, get_db, init_db
 from app.funnel import get_store_funnel_data
 from app.heatmap import get_store_heatmap_data
 from app.metrics import get_store_metrics_data, parse_timestamp
-from app.models import EventSchema
+from app.models import EventSchema, canonical_event_type
 from app.pos_loader import load_pos_csv
 
 
@@ -147,8 +147,6 @@ def health_check(request: Request, db: Session = Depends(get_db)):
         )
 
     # Build per-store health by querying the latest event per store_id
-    last_ingest_time = getattr(request.app.state, "last_ingest_time", None)
-
     # Get distinct store IDs
     store_ids_rows = db.query(DBEvent.store_id).distinct().all()
     store_ids = [r[0] for r in store_ids_rows]
@@ -171,17 +169,10 @@ def health_check(request: Request, db: Session = Depends(get_db)):
             last_event_ts = last_event.timestamp
             dt = parse_timestamp(last_event_ts)
             if dt:
-                if last_ingest_time:
-                    lag_seconds = (
-                        datetime.now(timezone.utc).replace(tzinfo=None) - last_ingest_time
-                    ).total_seconds()
-                    if lag_seconds > 600:
-                        stale_feed = True
-                else:
-                    now = datetime.now(timezone.utc).replace(tzinfo=None)
-                    lag_seconds = (now - dt).total_seconds()
-                    if lag_seconds > 600 and (now - dt).days < 1:
-                        stale_feed = True
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                lag_seconds = (now - dt).total_seconds()
+                if lag_seconds > 600:
+                    stale_feed = True
 
         stores_health[sid] = {"last_event_timestamp": last_event_ts, "stale_feed": stale_feed}
         if stale_feed:
@@ -237,9 +228,6 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
             detail=f"Batch too large. Max supported events per request is {max_batch}.",
         )
 
-    # Record wall-clock ingest time in app state to manage real-time stale feed health checks
-    request.app.state.last_ingest_time = datetime.now(timezone.utc).replace(tzinfo=None)
-
     # Extract store_id for request state logging
     if len(events) > 0 and isinstance(events[0], dict):
         request.state.store_id = events[0].get("store_id")
@@ -269,6 +257,7 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
                 success_count += 1
                 continue
 
+            event_type = canonical_event_type(event.event_type.value if hasattr(event.event_type, "value") else event.event_type)
             event_timestamp = event.timestamp.astimezone(timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%SZ"
             )
@@ -302,9 +291,7 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
                 store_id=event.store_id,
                 camera_id=event.camera_id,
                 visitor_id=event.visitor_id,
-                event_type=event.event_type.value
-                if hasattr(event.event_type, "value")
-                else event.event_type,
+                event_type=event_type,
                 timestamp=event_timestamp,
                 zone_id=event.zone_id,
                 dwell_ms=event.dwell_ms,

@@ -1,5 +1,6 @@
 import json
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -9,21 +10,51 @@ from app.database import DBPOS, DBEvent
 
 def parse_timestamp(ts_str):
     try:
-        return datetime.strptime(ts_str.replace("Z", ""), "%Y-%m-%dT%H:%M:%S")
+        if not ts_str:
+            return None
+        normalized = ts_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            return dt
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
     except Exception:
         try:
-            return datetime.fromisoformat(ts_str)
+            return datetime.strptime(ts_str.replace("Z", ""), "%Y-%m-%dT%H:%M:%S")
         except Exception:
             return None
 
 
+def _load_store_layout():
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    layout_path = os.path.join(base_dir, "config", "store_layout.json")
+    if not os.path.exists(layout_path):
+        return {}
+    try:
+        with open(layout_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def get_entry_camera_ids(store_id: str) -> list[str]:
+    layout = _load_store_layout()
+    store_config = next((s for s in layout.get("stores", []) if s.get("store_id") == store_id), None)
+    if not store_config:
+        return ["CAM_ENTRY_01", "cam1"]
+    roles = store_config.get("camera_roles", {})
+    cameras = store_config.get("cameras", {})
+    entry_ids = [cam_id for cam_id in cameras if roles.get(cam_id) == "entry"]
+    entry_ids.extend(["CAM_ENTRY_01", "cam1"])
+    deduped = []
+    for cam_id in entry_ids:
+        if cam_id not in deduped:
+            deduped.append(cam_id)
+    return deduped or ["CAM_ENTRY_01", "cam1"]
+
+
 def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] = None):
     # Entry cameras for this store (actual camera IDs)
-    ENTRY_CAMS = {
-        "ST1008": ["cam1", "CAM_ENTRY_01"],
-        "ST1076": ["cam1", "cam2", "CAM_ENTRY_01"],
-    }
-    entry_cams = ENTRY_CAMS.get(store_id, ["cam1", "CAM_ENTRY_01"])
+    entry_cams = get_entry_camera_ids(store_id)
 
     # Entry event types (Purplle native + legacy)
     ENTRY_EVENT_TYPES = ("ENTRY", "REENTRY", "entry", "reentry")
@@ -104,6 +135,7 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
     converted_visitors = set()
     total_dwell_seconds = 0.0
     billing_visitor_ids = set()
+    visitor_billing_times: dict[str, list[datetime]] = {}
 
     for vid, ev_list in active_sessions.items():
         # Dwell time calculation
@@ -138,18 +170,25 @@ def get_store_metrics_data(store_id: str, db: Session, camera_id: Optional[str] 
                 if dt:
                     billing_visits.append(dt)
                     billing_visitor_ids.add(vid)
+        if billing_visits:
+            visitor_billing_times[vid] = billing_visits
 
-        is_converted = False
-        for b_time in billing_visits:
-            for t_time in txn_times:
-                if b_time <= t_time <= b_time + timedelta(minutes=5):
-                    is_converted = True
-                    break
-            if is_converted:
+    consumed_txns = set()
+    sorted_visitors = sorted(
+        visitor_billing_times.items(),
+        key=lambda item: (min(item[1]) if item[1] else datetime.max, item[0]),
+    )
+    for vid, billing_visits in sorted_visitors:
+        matched_txn_idx = None
+        for t_idx, t_time in enumerate(txn_times):
+            if t_idx in consumed_txns:
+                continue
+            if any(b_time <= t_time <= b_time + timedelta(minutes=5) for b_time in billing_visits):
+                matched_txn_idx = t_idx
                 break
-
-        if is_converted:
+        if matched_txn_idx is not None:
             converted_visitors.add(vid)
+            consumed_txns.add(matched_txn_idx)
 
     conversion_rate = 0.0
     if total_store_visitors > 0:

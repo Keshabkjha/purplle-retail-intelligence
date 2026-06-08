@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from sqlalchemy import JSON, Boolean, Column, Float, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -57,6 +58,17 @@ class DBPOS(Base):
 
 
 def init_db():
+    # The challenge is stateless; reset the default SQLite file so local runs and tests
+    # start from a clean database instead of inheriting stale rows from previous runs.
+    if DATABASE_URL.startswith("sqlite:///") and DATABASE_URL != "sqlite:///:memory:":
+        db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+        if db_path and os.getenv("RESET_DB_ON_STARTUP", "1") == "1":
+            path = Path(db_path)
+            if path.exists():
+                try:
+                    path.unlink()
+                except Exception:
+                    pass
     Base.metadata.create_all(bind=engine)
 
 

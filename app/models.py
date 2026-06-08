@@ -41,6 +41,20 @@ EventType = Literal[
 ]
 
 
+def canonical_event_type(event_type: str) -> str:
+    mapping = {
+        "entry": "ENTRY",
+        "exit": "EXIT",
+        "zone_entered": "ZONE_ENTER",
+        "zone_exited": "ZONE_EXIT",
+        "zone_dwell": "ZONE_DWELL",
+        "queue_completed": "BILLING_QUEUE_JOIN",
+        "queue_abandoned": "BILLING_QUEUE_ABANDON",
+        "reentry": "REENTRY",
+    }
+    return mapping.get(event_type, event_type)
+
+
 class EventMetadata(BaseModel):
     model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 

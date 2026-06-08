@@ -68,3 +68,4 @@ logs/
 # Transient state files
 pipeline/session_state.json
 session_state.json
+*.zip

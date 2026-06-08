@@ -401,6 +401,7 @@ class CrossCameraSessionTracker:
         track_id = int(track_id)
         wx = float(wx)
         wy = float(wy)
+        track_key = (camera_id, track_id)
 
         emb = None
         if box is not None and frame is not None:
@@ -415,8 +416,8 @@ class CrossCameraSessionTracker:
             except Exception:
                 pass
 
-        if track_id in self.local_to_unified:
-            unified_id = self.local_to_unified[track_id]
+        if track_key in self.local_to_unified:
+            unified_id = self.local_to_unified[track_key]
             if unified_id in self.sessions:
                 sess = self.sessions[unified_id]
                 sess["last_seen_camera"] = camera_id
@@ -509,7 +510,7 @@ class CrossCameraSessionTracker:
                     MODEL_REGISTRY.identity_model.update(feature_vec, 1)
                 elif match_score >= 0.60 and uid != matched_id:
                     MODEL_REGISTRY.identity_model.update(feature_vec, 0)
-            self.local_to_unified[track_id] = matched_id
+            self.local_to_unified[track_key] = matched_id
             sess = self.sessions[matched_id]
             sess["last_seen_camera"] = camera_id
             sess["last_seen_time"] = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -540,7 +541,7 @@ class CrossCameraSessionTracker:
                 new_id = f"{base_new_id}_{counter}"
                 counter += 1
 
-            self.local_to_unified[track_id] = new_id
+            self.local_to_unified[track_key] = new_id
             self.sessions[new_id] = {
                 "unified_id": new_id,
                 "last_seen_camera": camera_id,
@@ -645,7 +646,7 @@ def post_event(event):
 
 def make_entry_exit_event(event_type, vid, s_code, sid, camera_id, ts_str,
                           is_staff, conf, group_id=None, group_size=None,
-                          gender="unknown", age=None, is_face_hidden=False):
+                          gender="unknown", age=None, is_face_hidden=False, sess_seq=1):
     """Emit a Purplle-format entry/exit event matching sample_events.jsonl."""
     age_bucket = age_to_bucket(age) if age is not None else "unknown"
     return {
@@ -666,10 +667,10 @@ def make_entry_exit_event(event_type, vid, s_code, sid, camera_id, ts_str,
         "store_id": sid,
         "visitor_id": vid,
         "timestamp": ts_str,
-        "zone_id": "ENTRY" if event_type == "entry" else "ENTRY",
+        "zone_id": None,
         "dwell_ms": 0,
         "confidence": float(conf),
-        "metadata": {"queue_depth": None, "sku_zone": None, "session_seq": 1},
+        "metadata": {"queue_depth": None, "sku_zone": None, "session_seq": int(sess_seq)},
     }
 
 
@@ -708,7 +709,7 @@ def make_zone_event(event_type, track_id_int, vid, sid, camera_id, ts_str,
 def make_queue_event(event_type, track_id_int, vid, sid, camera_id,
                      zone_id, zone_name, queue_join_ts, queue_served_ts,
                      queue_exit_ts, wait_seconds, queue_position, abandoned,
-                     hotspot_x, hotspot_y, gender="unknown", age=None):
+                     hotspot_x, hotspot_y, gender="unknown", age=None, sess_seq=1):
     """Emit a single Purplle queue lifecycle event (queue_completed / queue_abandoned)."""
     age_bucket = age_to_bucket(age) if age is not None else "unknown"
     return {
@@ -743,7 +744,7 @@ def make_queue_event(event_type, track_id_int, vid, sid, camera_id,
         "metadata": {
             "queue_depth": queue_position,
             "sku_zone": "BILLING",
-            "session_seq": 99,
+            "session_seq": int(sess_seq),
         },
         "event_type_legacy": "BILLING_QUEUE_ABANDON" if abandoned else "BILLING_QUEUE_JOIN",
     }
@@ -846,8 +847,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
 
         offset_seconds = frame_num / fps
         current_time = base_time + timedelta(seconds=offset_seconds)
-        ts_str = current_time.strftime("%Y-%m-%dT%H:%M:%S.000000")
-        ts_str_iso = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts_str = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         results = model.track(frame, persist=True, verbose=False)
 
@@ -915,10 +915,10 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
 
                             # Emit entry or reentry event (Purplle native format)
                             if cam_role == "entry":
-                                evt_type = "exit" if is_reentry else "entry"
+                                evt_type = "REENTRY" if is_reentry else "ENTRY"
                                 entry_evt = make_entry_exit_event(
                                     evt_type, vid, s_code, sid, camera_id, ts_str,
-                                    is_staff, float(conf),
+                                    is_staff, float(conf), sess_seq=sess["seq"],
                                 )
                                 post_event(entry_evt)
 
@@ -953,7 +953,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                                         bq["join_ts"], None if abandoned else ts_str, ts_str,
                                         wait_secs, bq["position"], abandoned,
                                         bq["hotspot_x"], bq["hotspot_y"],
-                                        sess.get("gender", "unknown"), sess.get("age"),
+                                        sess.get("gender", "unknown"), sess.get("age"), sess_seq=sess["seq"],
                                     )
                                     post_event(q_evt)
                                 elif cam_role == "zone":
@@ -988,14 +988,14 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                                         "hotspot_y": wy,
                                     }
 
-                                enter_evt = make_zone_event(
-                                    "zone_entered", sess["track_id_int"], vid, sid, camera_id, ts_str,
-                                    zone_id, zone_meta.get("zone_name", zone_id),
-                                    zone_meta.get("zone_type", "SHELF"),
-                                    zone_meta.get("is_revenue_zone", "Yes"),
-                                    wx, wy, is_staff, float(conf), 0, sess_seq=sess["seq"],
-                                )
-                                post_event(enter_evt)
+                                    enter_evt = make_zone_event(
+                                        "zone_entered", sess["track_id_int"], vid, sid, camera_id, ts_str,
+                                        zone_id, zone_meta.get("zone_name", zone_id),
+                                        zone_meta.get("zone_type", "SHELF"),
+                                        zone_meta.get("is_revenue_zone", "Yes"),
+                                        wx, wy, is_staff, float(conf), 0, sess_seq=sess["seq"],
+                                    )
+                                    post_event(enter_evt)
 
                         else:
                             # Same zone — emit ZONE_DWELL every 30s (scoring harness compat)
@@ -1012,7 +1012,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                                         "camera_id": camera_id,
                                         "visitor_id": vid,
                                         "event_type": "ZONE_DWELL",
-                                        "timestamp": ts_str_iso,
+                                        "timestamp": ts_str,
                                         "zone_id": zone_id,
                                         "dwell_ms": int(duration * 1000),
                                         "is_staff": sess["is_staff"],
@@ -1044,14 +1044,14 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                             sess["current_zone"] or "BILLING", "Billing Counter Queue",
                             bq["join_ts"], ts_str, ts_str,
                             wait_secs, bq["position"], False,
-                            bq["hotspot_x"], bq["hotspot_y"],
+                            bq["hotspot_x"], bq["hotspot_y"], sess_seq=sess["seq"],
                         )
                         post_event(q_evt)
 
                     if cam_role == "entry":
                         exit_evt = make_entry_exit_event(
-                            "exit", vid, s_code, sid, camera_id, ts_str_iso,
-                            sess["is_staff"], 0.90,
+                            "EXIT", vid, s_code, sid, camera_id, ts_str,
+                            sess["is_staff"], 0.90, sess_seq=sess["seq"],
                         )
                         post_event(exit_evt)
                     else:
@@ -1062,7 +1062,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                             "camera_id": camera_id,
                             "visitor_id": vid,
                             "event_type": "EXIT",
-                            "timestamp": ts_str_iso,
+                            "timestamp": ts_str,
                             "zone_id": sess.get("current_zone"),
                             "dwell_ms": int((current_time - sess["enter_time"]).total_seconds() * 1000) if sess.get("current_zone") else 0,
                             "is_staff": sess["is_staff"],
