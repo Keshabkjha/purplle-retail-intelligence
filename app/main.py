@@ -810,3 +810,14 @@ def get_dashboard():
         with open(dashboard_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read(), status_code=200)
     raise HTTPException(status_code=404, detail="Dashboard file not found.")
+
+@app.get("/guide", response_class=HTMLResponse)
+def get_docs():
+    import os
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    docs_path = os.path.join(base_dir, "app", "docs.html")
+    if os.path.exists(docs_path):
+        with open(docs_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read(), status_code=200)
+    raise HTTPException(status_code=404, detail="Docs file not found.")

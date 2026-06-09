@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation • Purplle Retail Intelligence</title>
+    <meta name="description" content="Technical Documentation, Architecture, and Business Impact for the Purplle Retail Intelligence Hub.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#090a0f',
+                        panelBg: '#13151f',
+                        primary: '#6366f1',
+                        accentBlue: '#3b82f6',
+                        accentPurple: '#8b5cf6',
+                        accentPink: '#ec4899',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .glass-panel {
+            background: rgba(19, 21, 31, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Markdown-like Styles */
+        .prose h1 { font-size: 2.25rem; font-weight: 800; color: #fff; margin-bottom: 1.5rem; letter-spacing: -0.025em; }
+        .prose h2 { font-size: 1.5rem; font-weight: 700; color: #f8fafc; margin-top: 3rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .prose h3 { font-size: 1.125rem; font-weight: 600; color: #e2e8f0; margin-top: 2rem; margin-bottom: 0.75rem; }
+        .prose p { margin-bottom: 1.25rem; line-height: 1.7; color: #cbd5e1; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.5rem; color: #cbd5e1; }
+        .prose li { margin-bottom: 0.5rem; line-height: 1.6; }
+        .prose strong { color: #f8fafc; font-weight: 600; }
+        .prose a { color: #8b5cf6; text-decoration: none; transition: color 0.2s; }
+        .prose a:hover { color: #a78bfa; text-decoration: underline; }
+        .prose code { background: rgba(255,255,255,0.1); padding: 0.2em 0.4em; border-radius: 0.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.875em; color: #a78bfa; }
+        
+        .nav-link {
+            transition: all 0.2s ease;
+            border-left: 2px solid transparent;
+        }
+        .nav-link:hover {
+            border-left-color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.1);
+            color: #fff;
+        }
+        .nav-link.active {
+            border-left-color: #6366f1;
+            background: rgba(99, 102, 241, 0.15);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .gradient-text {
+            background: linear-gradient(to right, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="w-full px-8 py-4 flex justify-between items-center border-b border-white/5 bg-darkBg/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <i data-lucide="book-open" class="w-4 h-4 text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-white leading-tight">Intelligence Docs</h1>
+                <p class="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Purplle Retail</p>
+            </div>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-300 transition-colors flex items-center gap-2">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            Back to Dashboard
+        </a>
+    </header>
+
+    <!-- Main Content Layout -->
+    <div class="flex-1 flex w-full max-w-7xl mx-auto">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 flex-shrink-0 border-r border-white/5 py-8 hidden md:block sticky top-[73px] h-[calc(100vh-73px)] overflow-y-auto">
+            <div class="px-6 mb-6">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Contents</h3>
+                <nav class="space-y-1">
+                    <a href="#quick-guide" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Quick Guide</a>
+                    <a href="#problem-statement" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">The Problem</a>
+                    <a href="#business-impact" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Business Impact</a>
+                    <a href="#industry-usage" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Industry Usage</a>
+                    <a href="#architecture" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Architecture</a>
+                    <a href="#scalability" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Scalability</a>
+                    <a href="#reliability" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Reliability</a>
+                    <a href="#multi-device" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Multi-Device Config</a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Document Content -->
+        <main class="flex-1 px-8 py-10 md:py-12 max-w-4xl">
+            <div class="prose max-w-none">
+                
+                <h1 class="gradient-text text-5xl mb-4">Purplle Retail Intelligence</h1>
+                <p class="text-lg text-slate-300 mb-12">A state-of-the-art Computer Vision & Spatial Analytics platform designed to transform raw CCTV footage into actionable operational intelligence for physical retail stores.</p>
+
+                <!-- QUICK GUIDE -->
+                <section id="quick-guide" class="scroll-mt-24">
+                    <h2>🚀 Quick Guide</h2>
+                    <p>Designed for both technical operators and store executives, getting started takes only a few steps.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 mb-8">
+                        <div class="glass-panel p-6 rounded-xl">
+                            <h3 class="text-indigo-400 mt-0 flex items-center gap-2"><i data-lucide="play-circle" class="w-5 h-5"></i> For Non-Tech Users</h3>
+                            <p class="text-sm"><strong>1. Dashboard View:</strong> Access the main UI. You are in <em>Executive Mode</em> by default, seeing high-level metrics (Footfall, Dwell Time, Heatmaps).</p>
+                            <p class="text-sm"><strong>2. View Heatmaps:</strong> Click the <em>Heatmap</em> tab to see where customers spend the most time.</p>
+                            <p class="text-sm"><strong>3. Live Feed:</strong> Watch the <em>Event Feed</em> on the right to see customers entering, dwelling, and queueing in real-time.</p>
+                        </div>
+                        <div class="glass-panel p-6 rounded-xl">
+                            <h3 class="text-pink-400 mt-0 flex items-center gap-2"><i data-lucide="terminal" class="w-5 h-5"></i> For Tech Experts</h3>
+                            <p class="text-sm"><strong>1. Run API:</strong> <code>./run-api.sh</code> starts the FastAPI backend on port 8000.</p>
+                            <p class="text-sm"><strong>2. Run Pipeline:</strong> Execute <code>python pipeline/detect.py</code> to process raw MP4 files. This parses YOLO detections into JSON events.</p>
+                            <p class="text-sm"><strong>3. Engineer Mode:</strong> Toggle "Engineer Mode" in the UI to view raw bounding boxes, raw event JSON feeds, and zone overlays.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- THE PROBLEM -->
+                <section id="problem-statement" class="scroll-mt-24">
+                    <h2>🎯 The Problem It Solves</h2>
+                    <p>Physical retail suffers from a massive data deficit compared to e-commerce. While online stores track every click, hover, and bounce, physical stores are a "black box" once a customer walks through the door.</p>
+                    <ul>
+                        <li><strong>Layout Inefficiency:</strong> Retailers don't know which shelves attract attention but don't convert to sales.</li>
+                        <li><strong>Staff Allocation:</strong> Managers struggle to match staff schedules with real-time customer influx.</li>
+                        <li><strong>Queue Abandonment:</strong> Long lines at checkout lead to lost revenue, but managers are only aware <em>after</em> the queue has formed.</li>
+                        <li><strong>Manual Auditing:</strong> Relying on human security guards to manually watch CCTV arrays is expensive, error-prone, and unscalable.</li>
+                    </ul>
+                </section>
+
+                <!-- BUSINESS IMPACT -->
+                <section id="business-impact" class="scroll-mt-24">
+                    <h2>💼 Business Impact: Before & After</h2>
+                    <div class="overflow-x-auto my-8">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-white/10">
+                                    <th class="py-3 px-4 text-slate-300 font-bold">Metric / Area</th>
+                                    <th class="py-3 px-4 text-slate-400 font-medium">Before (Legacy Systems)</th>
+                                    <th class="py-3 px-4 text-indigo-400 font-bold">After (Purplle Intelligence)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-sm">
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4 font-semibold text-slate-200">Customer Tracking</td>
+                                    <td class="py-3 px-4 text-slate-400">Basic infrared beam counters at the door (highly inaccurate).</td>
+                                    <td class="py-3 px-4 text-indigo-200">Re-ID (Person Re-identification) tracking across multiple cameras.</td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4 font-semibold text-slate-200">Store Layout</td>
+                                    <td class="py-3 px-4 text-slate-400">A/B testing relies on end-of-month sales data.</td>
+                                    <td class="py-3 px-4 text-indigo-200">Real-time spatial heatmaps reveal exactly where customers dwell instantly.</td>
+                                </tr>
+                                <tr class="border-b border-white/5">
+                                    <td class="py-3 px-4 font-semibold text-slate-200">Staffing</td>
+                                    <td class="py-3 px-4 text-slate-400">Staff and customers are mixed together in head-counts.</td>
+                                    <td class="py-3 px-4 text-indigo-200">AI automatically filters out staff via uniform detection; accurate customer metrics.</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 px-4 font-semibold text-slate-200">Queue Management</td>
+                                    <td class="py-3 px-4 text-slate-400">Reactive—managers open registers when customers complain.</td>
+                                    <td class="py-3 px-4 text-indigo-200">Proactive—system detects "Dwell in Queue Zone" and alerts managers.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- INDUSTRY USAGE -->
+                <section id="industry-usage" class="scroll-mt-24">
+                    <h2>🏢 Industry Usages</h2>
+                    <p>This repository represents an <strong>industry-standard, state-of-the-art</strong> approach to edge-AI computer vision. It mirrors architectures used by Amazon Go, Walmart Global Tech, and top-tier retail analytics firms.</p>
+                    <ul>
+                        <li><strong>Cosmetics & Beauty (Purplle/Sephora):</strong> Measuring dwell time at specific makeup tester stations.</li>
+                        <li><strong>Supermarkets:</strong> Analyzing cart paths to optimize end-cap promotional placements.</li>
+                        <li><strong>Apparel:</strong> Tracking the conversion funnel from "Browsing" to "Fitting Room" to "Checkout".</li>
+                        <li><strong>Loss Prevention:</strong> Anomaly detection spots unusual loitering near high-value merchandise.</li>
+                    </ul>
+                </section>
+
+                <hr class="my-12 border-white/10" />
+
+                <!-- ARCHITECTURE -->
+                <section id="architecture" class="scroll-mt-24">
+                    <h2>⚙️ System Architecture & Portability</h2>
+                    <p>The system is built as a decoupled, asynchronous, and highly portable platform.</p>
+                    
+                    <h3>1. Extreme Portability</h3>
+                    <p>The entire application is designed to run on the Edge (e.g., a localized store server or NVIDIA Jetson) or in the Cloud.</p>
+                    <ul>
+                        <li><strong>Dependency Isolation:</strong> Managed via strict <code>requirements.txt</code> with pinned versions.</li>
+                        <li><strong>OS Agnostic:</strong> Runs seamlessly on macOS (M-series CoreML), Linux (CUDA), and Windows. Path handling uses robust <code>os.path</code> standard libraries, bypassing OS-specific slash issues.</li>
+                        <li><strong>Zero-Config Database:</strong> Uses SQLite for portability. You do not need to stand up a complex PostgreSQL cluster to deploy a store. A single `.db` file holds all analytical metrics, making backups as simple as a file copy.</li>
+                    </ul>
+
+                    <h3>2. Scalability</h3>
+                    <p>Can this handle a busy store with thousands of events?</p>
+                    <ul>
+                        <li><strong>Asynchronous Backend:</strong> The FastAPI backend uses <code>async/await</code> extensively. It can ingest thousands of JSON events per second from the CV pipeline without blocking UI requests.</li>
+                        <li><strong>Batch Processing:</strong> The CV pipeline does not hit the database for every single frame. It buffers tracking states in memory and performs bulk inserts, drastically reducing I/O overhead.</li>
+                        <li><strong>Adaptive Inference:</strong> The pipeline dynamically scales image resolution and skip-frames based on hardware capability (CPU vs MPS vs CUDA).</li>
+                    </ul>
+                </section>
+
+                <!-- RELIABILITY -->
+                <section id="reliability" class="scroll-mt-24">
+                    <h2>🛡️ Reliability & Security</h2>
+                    <p>Enterprise software must be resilient to failures and secure against intrusions.</p>
+                    <ul>
+                        <li><strong>WAL Mode:</strong> The SQLite database is configured with Write-Ahead Logging (WAL). This ensures that heavy read operations (the Dashboard polling) do not block heavy write operations (the Pipeline ingesting), preventing database locking errors.</li>
+                        <li><strong>Robust Error Handling:</strong> The Pos Loader and Event Ingestion engines wrap operations in transactional blocks. If a corrupt CSV or malformed JSON is uploaded, the transaction rolls back, preventing database corruption.</li>
+                        <li><strong>Security Hardened:</strong> 
+                            <ul>
+                                <li><strong>XSS Prevention:</strong> The UI employs strict DOM sanitization (<code>escapeHtml</code>) before rendering any user-sourced data (like Camera IDs or Event Labels) into the DOM.</li>
+                                <li><strong>Path Traversal Protection:</strong> API endpoints strictly validate video file paths against a secure base directory, preventing malicious actors from accessing system files like `/etc/passwd`.</li>
+                                <li><strong>SQL Injection:</strong> All database queries utilize SQLAlchemy's ORM or parameterized execution. Zero string-concatenation SQL queries exist in the codebase.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </section>
+
+                <!-- MULTI DEVICE -->
+                <section id="multi-device" class="scroll-mt-24 mb-20">
+                    <h2>📷 Multi-Device Configuration</h2>
+                    <p>Real stores do not have just one camera. They have arrays of cameras covering different zones.</p>
+                    <ul>
+                        <li><strong>Zone Mapping:</strong> The application maps raw (x,y) pixel coordinates from multiple cameras into a unified store layout.</li>
+                        <li><strong>Camera Agnostic:</strong> The pipeline accepts an arbitrary number of RTSP streams or MP4 files. Each camera registers its events tagged with a unique <code>camera_id</code>.</li>
+                        <li><strong>Global Unique Identifiers:</strong> Person Re-Identification (ReID) ensures that if "Visitor 42" leaves Camera A's FOV and enters Camera B's FOV, they are tracked as the same session, rather than generating duplicate footfall counts.</li>
+                    </ul>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Simple Scroll Spy for Sidebar
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('.nav-link');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (scrollY >= (sectionTop - 150)) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href').includes(current)) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
