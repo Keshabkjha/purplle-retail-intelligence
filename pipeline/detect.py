@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import cv2
 import numpy as np
 import requests
+
 # The above code is importing the `torch` module in Python, which is commonly used for numerical
 # computations with support for GPU acceleration.
 # The above code is importing the `torch` library in Python, which is commonly used for machine
@@ -509,8 +510,6 @@ class CrossCameraSessionTracker:
                     if match_score >= 0.65 and match_score > max_match_score:
                         max_match_score = match_score
                         matched_id = uid
-                        best_dist = dist
-                        best_diff = diff
 
         if matched_id:
             print(f"🔗 [Re-ID] Track {track_id} in {camera_id} → {matched_id} (score: {max_match_score:.2f})")
@@ -750,7 +749,6 @@ def make_queue_event(event_type, track_id_int, vid, sid, camera_id,
         "event_id": str(uuid.uuid4()),
         "visitor_id": vid,
         "timestamp": queue_exit_ts,
-        "zone_id": zone_id,
         "dwell_ms": int(wait_seconds * 1000),
         "confidence": 0.88,
         "metadata": {
@@ -930,7 +928,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
                                 evt_type = "REENTRY" if is_reentry else "ENTRY"
                                 entry_evt = make_entry_exit_event(
                                     evt_type, vid, s_code, sid, camera_id, ts_str,
-                                    is_staff, float(conf), sess_seq=sess["seq"],
+                                    is_staff, float(conf), sess_seq=active_sessions[vid]["seq"],
                                 )
                                 post_event(entry_evt)
 
@@ -1097,7 +1095,7 @@ def run_detection(video_path: str, model_path: str = "yolo11n.pt"):
     # Transcode to H.264 for browser compatibility
     if os.path.exists(temp_out_path):
         try:
-            print(f"Transcoding to H.264...")
+            print("Transcoding to H.264...")
             import subprocess
             cmd = [
                 "ffmpeg", "-y", "-i", temp_out_path,

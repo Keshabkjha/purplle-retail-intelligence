@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+httpx
+psycopg2-binary
+pandas
+numpy
+cachetools
+websockets

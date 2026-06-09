@@ -19,13 +19,11 @@ import uuid
 from unittest.mock import patch
 
 import pytest
-from fastapi.responses import Response
-from fastapi.testclient import TestClient
 from fastapi import status
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
 
 from app.database import Base, get_db
 from app.main import RateLimiter, app
@@ -309,7 +307,6 @@ def test_get_dashboard(client):
 
 def test_get_simulation_status(client):
     import io
-    import json
     # Idle case
     with patch("os.path.exists", return_value=False):
         response = client.get("/api/simulation_status")

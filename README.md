@@ -21,6 +21,7 @@ pinned: false
   <a href="https://fastapi.tiangolo.com"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white"></a>
   <a href="https://docs.ultralytics.com"><img alt="YOLO11" src="https://img.shields.io/badge/YOLO11-Ultralytics-FF6B35?style=for-the-badge&logo=pytorch&logoColor=white"></a>
   <a href="https://docs.docker.com/compose/"><img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white"></a>
+  <a href="https://huggingface.co/spaces/keshabkjha/purplle-retail-intelligence"><img alt="Hugging Face Spaces" src="https://img.shields.io/badge/Hugging%20Face-Spaces-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-purple?style=for-the-badge"></a>
 </p>
 
@@ -30,6 +31,7 @@ pinned: false
 </p>
 
 <p align="center">
+  <a href="#-live-demo">Live Demo</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-architecture">Architecture</a> •
   <a href="#-api-reference">API Reference</a> •
@@ -37,6 +39,14 @@ pinned: false
   <a href="#-tech-stack">Tech Stack</a> •
   <a href="docs/DESIGN.md">Design Doc</a>
 </p>
+
+---
+
+## 🌐 Live Demo
+
+Experience the live dashboard and interactive documentation deployed on Hugging Face Spaces:
+
+👉 **[Live Demo: Purplle Retail Intelligence](https://huggingface.co/spaces/keshabkjha/purplle-retail-intelligence)**
 
 ---
 
@@ -514,11 +524,15 @@ python3 -m pytest --tb=short
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `sqlite:///./store_intelligence.db` | Database connection string |
+| `RESET_DB_ON_STARTUP` | `0` | Set to 1 to wipe the DB on startup |
 | `ENV` | `dev` | Environment name (`dev`/`prod`) |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
+| `ALLOWED_HOSTS` | ` ` | Comma-separated allowed hostnames |
+| `API_KEY` | ` ` | Expected API key for protected routes |
 | `RATE_LIMIT_PER_MINUTE` | `120` | Per-IP request limit |
 | `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window in seconds |
 | `MAX_INGEST_BATCH` | `500` | Maximum events per ingest request |
+| `MAX_REQUEST_BODY_BYTES` | `5242880` | Maximum request body size |
 | `INGEST_URL` | `http://localhost:8000/events/ingest` | Pipeline ingest endpoint |
 
 For production deployments, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
@@ -627,6 +641,17 @@ python3 pipeline/calibrate.py Revised.png
 ## 👤 Author
 
 **Keshab Kumar** — [@keshabkjha](https://github.com/keshabkjha)
+
+<p align="left">
+  <a href="https://linktr.ee/Keshabkjha"><img alt="Linktree" src="https://img.shields.io/badge/Linktree-Keshabkjha-39E09B?style=flat-square&logo=linktree&logoColor=white"></a>
+  <a href="https://www.linkedin.com/in/keshabkjha"><img alt="LinkedIn" src="https://img.shields.io/badge/LinkedIn-Keshab%20Kumar-0A66C2?style=flat-square&logo=linkedin&logoColor=white"></a>
+  <a href="https://github.com/Keshabkjha"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-Keshabkjha-181717?style=flat-square&logo=github&logoColor=white"></a>
+  <a href="https://leetcode.com/u/Keshabkjha/"><img alt="LeetCode" src="https://img.shields.io/badge/LeetCode-Keshabkjha-FFA116?style=flat-square&logo=leetcode&logoColor=white"></a>
+  <a href="https://codeforces.com/profile/keshabkjha"><img alt="Codeforces" src="https://img.shields.io/badge/Codeforces-keshabkjha-1F8ACB?style=flat-square&logo=codeforces&logoColor=white"></a>
+  <a href="https://www.kaggle.com/keshabkkumar"><img alt="Kaggle" src="https://img.shields.io/badge/Kaggle-keshabkkumar-20BEFF?style=flat-square&logo=kaggle&logoColor=white"></a>
+  <a href="https://codolio.com/profile/Keshabkjha"><img alt="Codolio" src="https://img.shields.io/badge/Codolio-Keshabkjha-8A2BE2?style=flat-square"></a>
+  <a href="https://wakatime.com/@Keshabkjha"><img alt="WakaTime" src="https://img.shields.io/badge/WakaTime-Keshabkjha-38A2F2?style=flat-square"></a>
+</p>
 
 > Built for the **Purplle Tech Challenge 2026 – Round 2**
 

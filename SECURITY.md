@@ -17,7 +17,7 @@ Please review our [Threat Model](docs/THREAT_MODEL.md) document to understand th
 
 We take security seriously. If you discover a security vulnerability within Purplle Retail Intelligence, please do **NOT** open a public issue.
 
-Instead, please send an email to `security@purplle-retail.example.com`. We will strive to acknowledge your report within 48 hours and will provide a timeline for a resolution.
+Instead, please report it via the [GitHub Security Advisory](https://github.com/Keshabkjha/purplle-retail-intelligence/security/advisories/new) tab. We will strive to acknowledge your report within 48 hours and will provide a timeline for a resolution.
 
 ### What to include in your report:
 - A detailed description of the vulnerability.

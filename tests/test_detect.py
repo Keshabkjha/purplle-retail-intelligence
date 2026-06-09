@@ -1,5 +1,5 @@
 import numpy as np
-import pytest
+
 from pipeline.detect import (
     age_to_bucket,
     camera_transition_prior,
@@ -9,6 +9,7 @@ from pipeline.detect import (
     resolve_camera_id_and_store,
     zone_transition_prior,
 )
+
 
 def test_age_to_bucket():
     assert age_to_bucket(17) == "18-24"

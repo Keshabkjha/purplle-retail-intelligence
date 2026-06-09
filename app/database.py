@@ -6,10 +6,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./store_intelligence.db")
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
-)
+engine_kwargs = {"connect_args": {"check_same_thread": False}} if DATABASE_URL.startswith("sqlite") else {"pool_size": 5, "max_overflow": 10}
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
@@ -62,7 +60,7 @@ def init_db():
     # start from a clean database instead of inheriting stale rows from previous runs.
     if DATABASE_URL.startswith("sqlite:///") and DATABASE_URL != "sqlite:///:memory:":
         db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-        if db_path and os.getenv("RESET_DB_ON_STARTUP", "1") == "1":
+        if db_path and os.getenv("RESET_DB_ON_STARTUP", "0") == "1":
             path = Path(db_path)
             if path.exists():
                 try:

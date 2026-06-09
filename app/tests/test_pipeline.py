@@ -2,8 +2,10 @@
 # CHANGES MADE: Created isolated unit test suite covering pipeline spatial mapping utilities.
 
 from unittest.mock import MagicMock, patch
+
 import cv2
 import numpy as np
+
 from pipeline.detect import determine_zone, map_camera_to_floor, point_in_polygon, run_detection
 
 

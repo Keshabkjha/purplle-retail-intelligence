@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          
+      - name: Build Docker API Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api.Dockerfile
+          push: false
+          tags: purplle-retail-intelligence-api:release
+          load: true
+          
+      - name: Generate API Image SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: purplle-retail-intelligence-api:release
+          format: spdx-json
+          output-file: sbom-api.spdx.json
+          
+      - name: Build Source Distribution
+        run: |
+          mkdir -p dist
+          tar -czf dist/purplle-retail-intelligence-${{ github.ref_name }}.tar.gz app pipeline config docs requirements*.txt Dockerfile api.Dockerfile docker-compose.yml
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sbom-api.spdx.json
+            dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

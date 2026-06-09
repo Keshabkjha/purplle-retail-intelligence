@@ -1,6 +1,5 @@
 from pipeline.detect import run_detection
 
-
 if __name__ == "__main__":
     import sys
 

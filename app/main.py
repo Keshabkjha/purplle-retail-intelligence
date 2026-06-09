@@ -13,7 +13,16 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Path,
+    Request,
+    Response,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
@@ -187,6 +196,8 @@ async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("X-XSS-Protection", "0")
+    response.headers.setdefault("X-Request-ID", getattr(request.state, "trace_id", "unknown"))
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault(
         "Permissions-Policy",
@@ -199,12 +210,18 @@ async def security_headers_middleware(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com data:; "
         "img-src 'self' data: https:; "
+        "worker-src blob:; "
         "media-src 'self' blob: data:; "
         "connect-src 'self'; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self'",
     )
+    if request.url.path.startswith("/api/") or request.url.path.startswith("/stores/"):
+        response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+    elif request.url.path in ("/dashboard", "/guide", "/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=3600")
+
     if os.getenv("ENABLE_HSTS", "0") == "1" or os.getenv("ENV", "dev").lower() == "prod":
         response.headers.setdefault(
             "Strict-Transport-Security",
@@ -342,20 +359,22 @@ def liveness_check():
 
 @app.get("/", response_class=HTMLResponse)
 def landing_page():
-    links_html = "\n".join(
-        f'<a href="{html.escape(link)}" rel="me noopener noreferrer" target="_blank">{html.escape(link)}</a>'
+    social_links_html = "".join([
+        f'<a href="{html.escape(link)}" target="_blank" rel="noopener noreferrer" class="social-chip">'
+        f'<span class="chip-text">{html.escape(link.split("://")[-1].strip("/"))}</span>'
+        f'</a>'
         for link in AUTHOR_LINKS
-    )
+    ])
+    
     return HTMLResponse(
         content=f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{APP_NAME} by {APP_AUTHOR} {APP_AUTHOR_HANDLE}</title>
-  <meta name="description" content="Production-ready AI retail intelligence dashboard by Keshab Kumar (@keshabkjha), converting CCTV footage into footfall, dwell, funnel, queue, and anomaly analytics.">
+  <title>{APP_NAME} | By {APP_AUTHOR}</title>
+  <meta name="description" content="Production-ready AI retail intelligence platform by Keshab Kumar (@keshabkjha). Real-time CCTV analytics for footfall, dwell, funnel, and POS conversion.">
   <meta name="author" content="{APP_AUTHOR}">
-  <meta name="keywords" content="Keshab Kumar, keshabkjha, @keshabkjha, Purplle Retail Intelligence, retail analytics, computer vision, FastAPI, YOLO, CCTV analytics">
   <link rel="canonical" href="{APP_PUBLIC_BASE_URL}/">
   <link rel="manifest" href="/site.webmanifest">
   <meta property="og:title" content="{APP_NAME}">
@@ -380,30 +399,83 @@ def landing_page():
   }}
   </script>
   <style>
-    body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #0b1020; color: #e5edf8; }}
-    main {{ min-height: 100vh; display: grid; place-items: center; padding: 2rem; background: radial-gradient(circle at 15% 10%, rgba(24,194,167,.25), transparent 34rem), radial-gradient(circle at 80% 20%, rgba(56,189,248,.18), transparent 30rem); }}
-    section {{ max-width: 920px; border: 1px solid rgba(148,163,184,.22); border-radius: 2rem; background: rgba(15,23,42,.74); padding: clamp(1.5rem, 5vw, 4rem); box-shadow: 0 24px 80px rgba(0,0,0,.32); }}
-    h1 {{ font-size: clamp(2.5rem, 8vw, 5.5rem); line-height: .92; letter-spacing: -.06em; margin: 0 0 1rem; }}
-    p {{ color: #cbd5e1; font-size: 1.08rem; line-height: 1.7; }}
-    .actions, .links {{ display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }}
-    a {{ color: #a7f3d0; }}
-    .button {{ border: 1px solid rgba(24,194,167,.38); border-radius: 999px; padding: .8rem 1rem; text-decoration: none; font-weight: 800; background: rgba(24,194,167,.12); }}
-    .links a {{ font-size: .9rem; }}
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap');
+    :root {{
+      --bg: #09090b; --text: #f8fafc; --text-muted: #94a3b8;
+      --accent: #10b981; --accent-hover: #059669; --card-bg: rgba(30, 41, 59, 0.4);
+      --border: rgba(148, 163, 184, 0.1);
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }}
+    .bg-elements {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; overflow: hidden; pointer-events: none; }}
+    .orb {{ position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.4; animation: float 20s infinite alternate ease-in-out; }}
+    .orb-1 {{ top: -10%; left: -10%; width: 50vw; height: 50vw; background: radial-gradient(circle, #3b82f6, transparent 70%); }}
+    .orb-2 {{ bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: radial-gradient(circle, #ec4899, transparent 70%); animation-delay: -5s; }}
+    .orb-3 {{ top: 40%; left: 60%; width: 30vw; height: 30vw; background: radial-gradient(circle, #10b981, transparent 70%); animation-delay: -10s; }}
+    @keyframes float {{ 0% {{ transform: translate(0, 0) scale(1); }} 100% {{ transform: translate(5%, 10%) scale(1.1); }} }}
+    main {{ flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem; position: relative; z-index: 1; }}
+    .glass-card {{ max-width: 900px; width: 100%; background: var(--card-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: 2rem; padding: 4rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1); animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(40px); }}
+    @keyframes slideUp {{ to {{ opacity: 1; transform: translateY(0); }} }}
+    .badge {{ display: inline-block; padding: 0.4rem 1rem; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 999px; font-size: 0.875rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 1.5rem; }}
+    h1 {{ font-family: 'Outfit', sans-serif; font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; line-height: 1.1; margin-bottom: 1.5rem; letter-spacing: -0.02em; }}
+    .gradient-text {{ background: linear-gradient(135deg, #fff 0%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+    .subtitle {{ font-size: 1.25rem; line-height: 1.6; color: var(--text-muted); margin-bottom: 3rem; max-width: 600px; }}
+    .button-group {{ display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 4rem; }}
+    .btn {{ display: inline-flex; align-items: center; justify-content: center; padding: 1rem 2rem; border-radius: 1rem; font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 1.1rem; text-decoration: none; transition: all 0.2s ease; border: 1px solid transparent; }}
+    .btn-primary {{ background: var(--text); color: var(--bg); }}
+    .btn-primary:hover {{ transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(255,255,255,0.2); }}
+    .btn-secondary {{ background: rgba(255,255,255,0.05); color: var(--text); border-color: rgba(255,255,255,0.1); }}
+    .btn-secondary:hover {{ background: rgba(255,255,255,0.1); transform: translateY(-2px); }}
+    .author-section {{ border-top: 1px solid var(--border); padding-top: 2.5rem; }}
+    .author-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }}
+    .author-info {{ display: flex; align-items: center; gap: 1rem; }}
+    .author-avatar {{ width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #ec4899, #8b5cf6); display: flex; align-items: center; justify-content: center; font-family: 'Outfit'; font-weight: 800; font-size: 1.2rem; color: white; }}
+    .author-details p {{ margin: 0; }}
+    .author-name {{ font-weight: 600; font-size: 1.1rem; color: var(--text); }}
+    .author-handle {{ font-size: 0.9rem; color: var(--text-muted); }}
+    .hf-badge {{ display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(255, 210, 30, 0.1); color: #ffd21e; border: 1px solid rgba(255, 210, 30, 0.3); border-radius: 0.5rem; font-size: 0.9rem; text-decoration: none; font-weight: 500; transition: all 0.2s; }}
+    .hf-badge:hover {{ background: rgba(255, 210, 30, 0.2); transform: translateY(-1px); }}
+    .social-links {{ display: flex; flex-wrap: wrap; gap: 0.75rem; }}
+    .social-chip {{ display: inline-flex; padding: 0.5rem 1rem; border-radius: 999px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); text-decoration: none; color: var(--text-muted); font-size: 0.85rem; transition: all 0.2s; }}
+    .social-chip:hover {{ background: rgba(255,255,255,0.1); color: var(--text); border-color: rgba(255,255,255,0.2); transform: translateY(-1px); }}
+    @media (max-width: 768px) {{ .glass-card {{ padding: 2rem; }} h1 {{ font-size: 2.5rem; }} }}
   </style>
 </head>
 <body>
+  <div class="bg-elements">
+    <div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div>
+  </div>
   <main>
-    <section>
-      <p><strong>{APP_AUTHOR_HANDLE}</strong> presents</p>
-      <h1>{APP_NAME}</h1>
-      <p>Production-focused computer vision retail intelligence for footfall, dwell time, customer funnel, billing queue, heatmap, POS conversion, and anomaly analytics.</p>
-      <div class="actions">
-        <a class="button" href="/dashboard">Open Dashboard</a>
-        <a class="button" href="/guide">Read Documentation</a>
-        <a class="button" href="/docs">API Reference</a>
+    <div class="glass-card">
+      <div class="badge">Production Ready</div>
+      <h1><span class="gradient-text">{APP_NAME}</span></h1>
+      <p class="subtitle">End-to-end computer vision retail intelligence. Real-time operations dashboard converting CCTV feeds into footfall, dwell, funnel, and anomaly analytics.</p>
+      
+      <div class="button-group">
+        <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
+        <a href="/guide" class="btn btn-secondary">Documentation</a>
+        <a href="/docs" class="btn btn-secondary">API Reference</a>
       </div>
-      <div class="links">{links_html}</div>
-    </section>
+
+      <div class="author-section">
+        <div class="author-header">
+          <div class="author-info">
+            <div class="author-avatar">KK</div>
+            <div class="author-details">
+              <p class="author-name">{APP_AUTHOR}</p>
+              <p class="author-handle">{APP_AUTHOR_HANDLE}</p>
+            </div>
+          </div>
+          <a href="https://huggingface.co/spaces/keshabkjha/purplle-retail-intelligence" target="_blank" rel="noopener" class="hf-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 21C5.47715 21 1 16.5228 1 11C1 5.47715 5.47715 1 11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13 3C18.5228 3 23 7.47715 23 13C23 18.5228 18.5228 23 13 23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 9C7 10.1046 6.10457 11 5 11C3.89543 11 3 10.1046 3 9C3 7.89543 3.89543 7 5 7C6.10457 7 7 7.89543 7 9Z" fill="currentColor"/><path d="M21 15C21 16.1046 20.1046 17 19 17C17.8954 17 17 16.1046 17 15C17 13.8954 17.8954 13 19 13C20.1046 13 21 13.8954 21 15Z" fill="currentColor"/><path d="M15.5 8.5C15.5 9.60457 14.6046 10.5 13.5 10.5C12.3954 10.5 11.5 9.60457 11.5 8.5C11.5 7.39543 12.3954 6.5 13.5 6.5C14.6046 6.5 15.5 7.39543 15.5 8.5Z" fill="currentColor"/><path d="M12.5 15.5C12.5 16.6046 11.6046 17.5 10.5 17.5C9.39543 17.5 8.5 16.6046 8.5 15.5C8.5 14.3954 9.39543 13.5 10.5 13.5C11.6046 13.5 12.5 14.3954 12.5 15.5Z" fill="currentColor"/></svg>
+            Live on Hugging Face
+          </a>
+        </div>
+        <div class="social-links">
+          {social_links_html}
+        </div>
+      </div>
+    </div>
   </main>
 </body>
 </html>""",
@@ -416,6 +488,8 @@ def robots_txt():
     return "\n".join(
         [
             "User-agent: *",
+            "Disallow: /api/",
+            "Crawl-delay: 2",
             "Allow: /",
             f"Sitemap: {APP_PUBLIC_BASE_URL}/sitemap.xml",
             "",
@@ -432,9 +506,11 @@ def sitemap_xml():
         ("/docs", "0.7"),
         ("/health", "0.3"),
     ]
+    lastmod = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     urls = "\n".join(
         f"""  <url>
     <loc>{html.escape(APP_PUBLIC_BASE_URL + path)}</loc>
+    <lastmod>{lastmod}</lastmod>
     <priority>{priority}</priority>
   </url>"""
         for path, priority in routes
@@ -602,7 +678,7 @@ def get_global_metrics(db: Session = Depends(get_db)):
     return get_store_metrics("ST1008", None, db)
 
 @app.get("/stores/{store_id}/metrics")
-def get_store_metrics(store_id: str, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_store_metrics(store_id: str = Path(..., pattern=r"^[A-Za-z0-9_-]{1,32}$"), camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         return get_store_metrics_data(store_id, db, camera_id)
     except Exception as e:
@@ -614,7 +690,7 @@ def get_store_metrics(store_id: str, camera_id: Optional[str] = None, db: Sessio
 
 
 @app.get("/stores/{store_id}/funnel")
-def get_store_funnel(store_id: str, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_store_funnel(store_id: str = Path(..., pattern=r"^[A-Za-z0-9_-]{1,32}$"), camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         return get_store_funnel_data(store_id, db, camera_id)
     except Exception as e:
@@ -626,7 +702,7 @@ def get_store_funnel(store_id: str, camera_id: Optional[str] = None, db: Session
 
 
 @app.get("/stores/{store_id}/heatmap")
-def get_store_heatmap(store_id: str, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_store_heatmap(store_id: str = Path(..., pattern=r"^[A-Za-z0-9_-]{1,32}$"), camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         return get_store_heatmap_data(store_id, db, camera_id)
     except Exception as e:
@@ -638,10 +714,10 @@ def get_store_heatmap(store_id: str, camera_id: Optional[str] = None, db: Sessio
 
 
 @app.get("/stores/{store_id}/cameras")
-def get_store_cameras(store_id: str, db: Session = Depends(get_db)):
+def get_store_cameras(store_id: str = Path(..., pattern=r"^[A-Za-z0-9_-]{1,32}$"), db: Session = Depends(get_db)):
     """Returns per-camera stats: visitor count, event count, processed status."""
-    import os
     import json
+    import os
     
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     layout_path = os.path.join(base_dir, "config", "store_layout.json")
@@ -704,7 +780,7 @@ def get_store_cameras(store_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stores/{store_id}/anomalies")
-def get_store_anomalies(store_id: str, db: Session = Depends(get_db)):
+def get_store_anomalies(store_id: str = Path(..., pattern=r"^[A-Za-z0-9_-]{1,32}$"), db: Session = Depends(get_db)):
     try:
         return get_store_anomalies_data(store_id, db)
     except Exception as e:
@@ -716,7 +792,7 @@ def get_store_anomalies(store_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/stores/{store_id}/recent-events")
-def get_store_recent_events(store_id: str, limit: int = 15, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_store_recent_events(store_id: str = Path(..., pattern=r"^[A-Za-z0-9_-]{1,32}$"), limit: int = 15, camera_id: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         query = db.query(DBEvent).filter(DBEvent.store_id == store_id)
         if camera_id:
@@ -756,7 +832,7 @@ def get_store_recent_events(store_id: str, limit: int = 15, camera_id: Optional[
 
 
 @app.get("/stores/{store_id}/system-stats")
-def get_store_system_stats(store_id: str, db: Session = Depends(get_db)):
+def get_store_system_stats(store_id: str = Path(..., pattern=r"^[A-Za-z0-9_-]{1,32}$"), db: Session = Depends(get_db)):
     import os
     import time
 
@@ -870,8 +946,9 @@ def list_videos():
 
 def send_bytes_range_requests(file_path: str, range_header: str):
     """Helper to stream file chunks supporting HTTP Range requests (crucial for macOS Safari/Chrome)."""
-    from fastapi.responses import StreamingResponse
     import os
+
+    from fastapi.responses import StreamingResponse
     
     file_size = os.path.getsize(file_path)
     
@@ -1041,7 +1118,8 @@ def run_simulation(
 @app.get("/api/simulation_status")
 def get_simulation_status():
     """Returns the current progress of the live simulation."""
-    import os, json
+    import json
+    import os
     progress_file = "pipeline/simulation_progress.json"
     if os.path.exists(progress_file):
         try:

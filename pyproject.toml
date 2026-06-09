@@ -36,7 +36,7 @@ module = [
 ignore_errors = true
 
 [tool.pytest.ini_options]
-addopts = "-v --tb=short --cov=app --cov=pipeline --cov-report=term-missing --cov-report=xml --cov-fail-under=55"
+addopts = "-v --tb=short --cov=app --cov=pipeline --cov-report=term-missing --cov-report=xml --cov-fail-under=60"
 testpaths = ["tests"]
 
 [tool.coverage.run]

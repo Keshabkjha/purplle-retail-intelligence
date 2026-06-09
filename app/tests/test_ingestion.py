@@ -1,6 +1,3 @@
-import os
-import csv
-import pytest
 from app.database import DBPOS, Base, SessionLocal, engine
 from app.pos_loader import load_pos_csv
 

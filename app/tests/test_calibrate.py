@@ -1,7 +1,8 @@
-import numpy as np
 from unittest.mock import MagicMock, patch
-import pytest
+
 import cv2
+import numpy as np
+
 import pipeline.calibrate
 from pipeline.calibrate import click_event, main
 

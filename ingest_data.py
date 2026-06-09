@@ -1,5 +1,6 @@
-import requests
 import json
+
+import requests
 
 events = []
 with open('sample_eventsbe42122.jsonl', 'r') as f:

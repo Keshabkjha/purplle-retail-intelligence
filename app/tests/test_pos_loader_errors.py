@@ -1,8 +1,15 @@
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.database import Base, DBPOS
-from app.pos_loader import load_pos_csv, get_transaction_times, get_brand_transaction_map, parse_pos_datetime
+
+from app.database import DBPOS, Base
+from app.pos_loader import (
+    get_brand_transaction_map,
+    get_transaction_times,
+    load_pos_csv,
+    parse_pos_datetime,
+)
+
 
 @pytest.fixture
 def db_session():

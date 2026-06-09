@@ -4,11 +4,12 @@ services:
       context: .
       dockerfile: api.Dockerfile
     ports:
-      - "8000:8000"
+      - "8000:8080"
     volumes:
       - .:/workspace
     environment:
       - DATABASE_URL=sqlite:///./store_intelligence.db
+      - RESET_DB_ON_STARTUP=0
       - ENV=dev
       - ALLOWED_ORIGINS=*
       - ALLOWED_HOSTS=
@@ -18,5 +19,11 @@ services:
       - MAX_INGEST_BATCH=500
       - MAX_REQUEST_BODY_BYTES=5242880
       - ENABLE_HSTS=0
-      - PORT=8000
+      - PORT=8080
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
