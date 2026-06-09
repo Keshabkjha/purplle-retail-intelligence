@@ -1,7 +1,9 @@
 import glob
+import html
 import json
 import logging
 import os
+import secrets
 import sys
 import time
 import uuid
@@ -11,9 +13,9 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status, BackgroundTasks
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -66,6 +68,21 @@ app = FastAPI(title="Store Intelligence API", lifespan=lifespan)
 MAX_INGEST_BATCH = int(os.getenv("MAX_INGEST_BATCH", "500"))
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "0"))
 RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(5 * 1024 * 1024)))
+APP_PUBLIC_BASE_URL = os.getenv("APP_PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/")
+APP_NAME = "Purplle Retail Intelligence"
+APP_AUTHOR = "Keshab Kumar"
+APP_AUTHOR_HANDLE = "@keshabkjha"
+AUTHOR_LINKS = [
+    "https://linktr.ee/Keshabkjha",
+    "https://www.linkedin.com/in/keshabkjha",
+    "https://github.com/Keshabkjha",
+    "https://leetcode.com/u/Keshabkjha/",
+    "https://codeforces.com/profile/keshabkjha",
+    "https://www.kaggle.com/keshabkkumar",
+    "https://codolio.com/profile/Keshabkjha",
+    "https://wakatime.com/@Keshabkjha",
+]
 
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 ALLOWED_ORIGINS = [
@@ -73,6 +90,32 @@ ALLOWED_ORIGINS = [
 ]
 if not ALLOWED_ORIGINS:
     ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:8000"]
+
+allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "")
+ALLOWED_HOSTS = [host.strip().lower() for host in allowed_hosts_env.split(",") if host.strip()]
+
+
+def _is_protected_api_key_valid(request: Request) -> bool:
+    """Validate optional production API key without impacting local/demo defaults."""
+    expected_key = os.getenv("API_KEY", "")
+    if not expected_key:
+        return True
+
+    provided_key = request.headers.get("x-api-key", "")
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        provided_key = authorization[7:].strip()
+
+    return bool(provided_key) and secrets.compare_digest(provided_key, expected_key)
+
+
+def require_api_key(request: Request) -> None:
+    if not _is_protected_api_key_valid(request):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Valid API key required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 class RateLimiter:
@@ -110,6 +153,64 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def host_and_body_guard_middleware(request: Request, call_next):
+    if ALLOWED_HOSTS:
+        host = request.headers.get("host", "").split(":")[0].lower()
+        if host not in ALLOWED_HOSTS:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Host not allowed"},
+            )
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    content={"detail": "Request body too large"},
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Invalid Content-Length header"},
+            )
+
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    )
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: https:; "
+        "media-src 'self' blob: data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'",
+    )
+    if os.getenv("ENABLE_HSTS", "0") == "1" or os.getenv("ENV", "dev").lower() == "prod":
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains; preload",
+        )
+    return response
 
 
 # Basic rate limiting middleware
@@ -239,11 +340,156 @@ def liveness_check():
     return {"status": "alive"}
 
 
+@app.get("/", response_class=HTMLResponse)
+def landing_page():
+    links_html = "\n".join(
+        f'<a href="{html.escape(link)}" rel="me noopener noreferrer" target="_blank">{html.escape(link)}</a>'
+        for link in AUTHOR_LINKS
+    )
+    return HTMLResponse(
+        content=f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{APP_NAME} by {APP_AUTHOR} {APP_AUTHOR_HANDLE}</title>
+  <meta name="description" content="Production-ready AI retail intelligence dashboard by Keshab Kumar (@keshabkjha), converting CCTV footage into footfall, dwell, funnel, queue, and anomaly analytics.">
+  <meta name="author" content="{APP_AUTHOR}">
+  <meta name="keywords" content="Keshab Kumar, keshabkjha, @keshabkjha, Purplle Retail Intelligence, retail analytics, computer vision, FastAPI, YOLO, CCTV analytics">
+  <link rel="canonical" href="{APP_PUBLIC_BASE_URL}/">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta property="og:title" content="{APP_NAME}">
+  <meta property="og:description" content="AI-powered retail operations intelligence by {APP_AUTHOR} {APP_AUTHOR_HANDLE}.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{APP_PUBLIC_BASE_URL}/">
+  <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">
+  {{
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "{APP_NAME}",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "author": {{
+      "@type": "Person",
+      "name": "{APP_AUTHOR}",
+      "alternateName": ["{APP_AUTHOR_HANDLE}", "keshabkjha"],
+      "url": "https://linktr.ee/Keshabkjha",
+      "sameAs": {json.dumps(AUTHOR_LINKS)}
+    }}
+  }}
+  </script>
+  <style>
+    body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #0b1020; color: #e5edf8; }}
+    main {{ min-height: 100vh; display: grid; place-items: center; padding: 2rem; background: radial-gradient(circle at 15% 10%, rgba(24,194,167,.25), transparent 34rem), radial-gradient(circle at 80% 20%, rgba(56,189,248,.18), transparent 30rem); }}
+    section {{ max-width: 920px; border: 1px solid rgba(148,163,184,.22); border-radius: 2rem; background: rgba(15,23,42,.74); padding: clamp(1.5rem, 5vw, 4rem); box-shadow: 0 24px 80px rgba(0,0,0,.32); }}
+    h1 {{ font-size: clamp(2.5rem, 8vw, 5.5rem); line-height: .92; letter-spacing: -.06em; margin: 0 0 1rem; }}
+    p {{ color: #cbd5e1; font-size: 1.08rem; line-height: 1.7; }}
+    .actions, .links {{ display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }}
+    a {{ color: #a7f3d0; }}
+    .button {{ border: 1px solid rgba(24,194,167,.38); border-radius: 999px; padding: .8rem 1rem; text-decoration: none; font-weight: 800; background: rgba(24,194,167,.12); }}
+    .links a {{ font-size: .9rem; }}
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <p><strong>{APP_AUTHOR_HANDLE}</strong> presents</p>
+      <h1>{APP_NAME}</h1>
+      <p>Production-focused computer vision retail intelligence for footfall, dwell time, customer funnel, billing queue, heatmap, POS conversion, and anomaly analytics.</p>
+      <div class="actions">
+        <a class="button" href="/dashboard">Open Dashboard</a>
+        <a class="button" href="/guide">Read Documentation</a>
+        <a class="button" href="/docs">API Reference</a>
+      </div>
+      <div class="links">{links_html}</div>
+    </section>
+  </main>
+</body>
+</html>""",
+        status_code=200,
+    )
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    return "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            f"Sitemap: {APP_PUBLIC_BASE_URL}/sitemap.xml",
+            "",
+        ]
+    )
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    routes = [
+        ("/", "1.0"),
+        ("/dashboard", "0.9"),
+        ("/guide", "1.0"),
+        ("/docs", "0.7"),
+        ("/health", "0.3"),
+    ]
+    urls = "\n".join(
+        f"""  <url>
+    <loc>{html.escape(APP_PUBLIC_BASE_URL + path)}</loc>
+    <priority>{priority}</priority>
+  </url>"""
+        for path, priority in routes
+    )
+    content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{urls}
+</urlset>
+"""
+    return Response(content=content, media_type="application/xml")
+
+
+@app.get("/site.webmanifest")
+def site_webmanifest():
+    return {
+        "name": APP_NAME,
+        "short_name": "Purplle RI",
+        "description": "Computer vision retail intelligence dashboard by Keshab Kumar.",
+        "start_url": "/dashboard",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#0b1020",
+        "theme_color": "#18c2a7",
+        "icons": [
+            {
+                "src": "/docs/assets/favicon.ico",
+                "sizes": "48x48",
+                "type": "image/x-icon",
+            }
+        ],
+    }
+
+
+@app.get("/api/project-profile")
+def project_profile():
+    return {
+        "name": APP_NAME,
+        "description": "AI-powered retail analytics for CCTV-based footfall, dwell, funnel, queue, and anomaly intelligence.",
+        "author": APP_AUTHOR,
+        "handle": APP_AUTHOR_HANDLE,
+        "public_base_url": APP_PUBLIC_BASE_URL,
+        "links": AUTHOR_LINKS,
+    }
+
+
 @app.post("/events/ingest", status_code=status.HTTP_207_MULTI_STATUS)
-def ingest_events(events: List[Any], request: Request, db: Session = Depends(get_db)):
+def ingest_events(
+    events: List[Any],
+    request: Request,
+    _: None = Depends(require_api_key),
+    db: Session = Depends(get_db),
+):
     if len(events) > 500:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Batch size exceeds the maximum limit of 500 events.",
         )
 
@@ -255,7 +501,7 @@ def ingest_events(events: List[Any], request: Request, db: Session = Depends(get
     max_batch = request.app.state.max_ingest_batch
     if max_batch and len(events) > max_batch:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"Batch too large. Max supported events per request is {max_batch}.",
         )
 
@@ -560,6 +806,7 @@ def load_pos_data(
     request: Request,
     background_tasks: BackgroundTasks,
     store_id_override: Optional[str] = None,
+    _: None = Depends(require_api_key),
     db: Session = Depends(get_db),
 ):
     """
@@ -709,7 +956,12 @@ def stream_annotated_video(video_name: str, request: Request):
 
 
 @app.post("/api/simulate")
-def run_simulation(req: SimulateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def run_simulation(
+    req: SimulateRequest,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(require_api_key),
+    db: Session = Depends(get_db),
+):
     """Trigger the live CV pipeline in the background on a specific video."""
     import json
 

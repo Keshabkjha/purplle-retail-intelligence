@@ -7,6 +7,10 @@ from datetime import datetime, timedelta
 import cv2
 import numpy as np
 import requests
+# The above code is importing the `torch` module in Python, which is commonly used for numerical
+# computations with support for GPU acceleration.
+# The above code is importing the `torch` library in Python, which is commonly used for machine
+# learning and deep learning tasks.
 import torch
 from ultralytics import YOLO
 

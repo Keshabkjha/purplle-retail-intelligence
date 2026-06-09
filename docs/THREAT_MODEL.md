@@ -17,11 +17,14 @@
 | Threat | Mitigation |
 |---|---|
 | Unauthorized event injection | Input validation, UUID enforcement, rate limiting, network ACLs |
+| Write endpoint abuse | Optional `API_KEY` protection for ingest, POS load, and simulation endpoints |
 | Data exfiltration | Principle of least privilege for DB credentials, private networks |
-| API abuse / DoS | Rate limiting, max ingest batch size, autoscaling |
+| API abuse / DoS | Rate limiting, max ingest batch size, request body size guard, autoscaling |
+| Host-header abuse | Optional `ALLOWED_HOSTS` allowlist |
+| Browser injection / clickjacking | CSP, `X-Frame-Options`, `X-Content-Type-Options`, referrer policy |
 | Dependency vulnerabilities | Dependabot + CodeQL scanning |
 | Secret leakage | Secret scanning in CI, avoid secrets in repo |
 
 ## Residual Risk
 
-This repository ships reference defaults. Production deployments should add auth (JWT/OAuth), IP allowlists, and encrypted storage according to local compliance requirements.
+This repository ships reference defaults plus lightweight API-key protection for write/admin endpoints. Production deployments should still add user auth (JWT/OAuth or identity-aware proxy), IP allowlists, shared rate limiting, HTTPS-only access, encrypted storage, and retention controls according to local compliance requirements.

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import status
 
 from app.database import Base, DBEvent, SessionLocal, engine
 from app.main import app
@@ -447,7 +448,7 @@ def test_ingest_batch_size_limit(client):
         )
 
     response = client.post("/events/ingest", json=large_batch)
-    assert response.status_code == 413
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
     assert "exceeds the maximum limit" in response.json()["detail"]
 
 

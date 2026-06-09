@@ -21,6 +21,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.responses import Response
 from fastapi.testclient import TestClient
+from fastapi import status
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -73,6 +74,74 @@ def test_rate_limit_blocks_excess(client):
         app.state.rate_limiter = original_limiter
 
 
+def test_security_headers_present(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+
+
+def test_api_key_protects_write_endpoints_when_configured(client, monkeypatch):
+    monkeypatch.setenv("API_KEY", "secret-test-key")
+    payload = [
+        {
+            "event_id": str(uuid.uuid4()),
+            "store_id": "ST1008",
+            "camera_id": "CAM_ENTRY_01",
+            "visitor_id": "VIS_SEC",
+            "event_type": "ENTRY",
+            "timestamp": "2026-04-10T10:00:00Z",
+            "zone_id": "ENTRY",
+            "dwell_ms": 0,
+            "is_staff": False,
+            "confidence": 0.95,
+            "metadata": {"queue_depth": None, "sku_zone": None, "session_seq": 1},
+        }
+    ]
+
+    blocked = client.post("/events/ingest", json=payload)
+    assert blocked.status_code == 401
+    assert blocked.json()["detail"] == "Valid API key required."
+
+    allowed = client.post("/events/ingest", json=payload, headers={"X-API-Key": "secret-test-key"})
+    assert allowed.status_code == 207
+    assert allowed.json()["ingested"] == 1
+
+
+def test_body_size_guard_blocks_oversized_requests(client):
+    response = client.post(
+        "/events/ingest",
+        content=b"{}",
+        headers={"Content-Length": str(10 * 1024 * 1024)},
+    )
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert response.json()["detail"] == "Request body too large"
+
+
+def test_seo_and_profile_routes(client):
+    landing = client.get("/")
+    assert landing.status_code == 200
+    assert "Keshab Kumar" in landing.text
+    assert "https://linktr.ee/Keshabkjha" in landing.text
+
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200
+    assert "Sitemap:" in robots.text
+
+    sitemap = client.get("/sitemap.xml")
+    assert sitemap.status_code == 200
+    assert "/guide" in sitemap.text
+
+    manifest = client.get("/site.webmanifest")
+    assert manifest.status_code == 200
+    assert manifest.json()["name"] == "Purplle Retail Intelligence"
+
+    profile = client.get("/api/project-profile")
+    assert profile.status_code == 200
+    assert profile.json()["handle"] == "@keshabkjha"
+
+
 def test_ingest_batch_limit(client):
     original_max = app.state.max_ingest_batch
     app.state.max_ingest_batch = 1
@@ -106,7 +175,7 @@ def test_ingest_batch_limit(client):
             },
         ]
         response = client.post("/events/ingest", json=payload)
-        assert response.status_code == 413
+        assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
         assert "Batch too large" in response.json()["detail"]
     finally:
         app.state.max_ingest_batch = original_max
@@ -284,4 +353,3 @@ def test_run_simulation_force(client):
         response = client.post("/api/simulate", json=payload)
         assert response.status_code == 200
         assert response.json()["status"] == "Simulation started in background."
-

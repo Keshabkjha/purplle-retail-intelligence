@@ -1,300 +1,1264 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documentation • Purplle Retail Intelligence</title>
-    <meta name="description" content="Technical Documentation, Architecture, and Business Impact for the Purplle Retail Intelligence Hub.">
+    <title>Purplle Retail Intelligence Documentation</title>
+    <meta name="description" content="Complete user, administrator, API, architecture, deployment, security, and troubleshooting documentation for Purplle Retail Intelligence.">
+    <meta name="author" content="Keshab Kumar">
+    <meta name="keywords" content="Keshab Kumar, keshabkjha, @keshabkjha, Purplle Retail Intelligence, retail analytics, computer vision, FastAPI, YOLO, CCTV analytics">
+    <link rel="canonical" href="/guide">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta property="og:title" content="Purplle Retail Intelligence Documentation">
+    <meta property="og:description" content="Production-grade documentation for the AI retail intelligence app by Keshab Kumar @keshabkjha.">
+    <meta property="og:type" content="article">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        darkBg: '#090a0f',
-                        panelBg: '#13151f',
-                        primary: '#6366f1',
-                        accentBlue: '#3b82f6',
-                        accentPurple: '#8b5cf6',
-                        accentPink: '#ec4899',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'Menlo', 'monospace'],
-                    }
-                }
-            }
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg: #0b1020;
+            --panel: rgba(16, 24, 43, 0.78);
+            --panel-solid: #10182b;
+            --line: rgba(148, 163, 184, 0.2);
+            --text: #e5edf8;
+            --muted: #9fb0c7;
+            --soft: #cad7ea;
+            --brand: #18c2a7;
+            --brand-2: #f59e0b;
+            --brand-3: #38bdf8;
+            --danger: #fb7185;
+            --code: #0a1222;
         }
-    </script>
-    <style type="text/tailwindcss">
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
-            color: #e2e8f0;
-            overflow-x: hidden;
+
+        html {
             scroll-behavior: smooth;
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-
-        .glass-panel {
-            background: rgba(19, 21, 31, 0.7);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at top left, rgba(24, 194, 167, 0.24), transparent 32rem),
+                radial-gradient(circle at 85% 10%, rgba(245, 158, 11, 0.16), transparent 30rem),
+                linear-gradient(135deg, #07111d 0%, #0b1020 44%, #111827 100%);
+            color: var(--text);
+            font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.65;
         }
 
-        /* Markdown-like Styles */
-        .prose h1 { font-size: 2.25rem; font-weight: 800; color: #fff; margin-bottom: 1.5rem; letter-spacing: -0.025em; }
-        .prose h2 { font-size: 1.5rem; font-weight: 700; color: #f8fafc; margin-top: 3rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .prose h3 { font-size: 1.125rem; font-weight: 600; color: #e2e8f0; margin-top: 2rem; margin-bottom: 0.75rem; }
-        .prose p { margin-bottom: 1.25rem; line-height: 1.7; color: #cbd5e1; }
-        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.5rem; color: #cbd5e1; }
-        .prose li { margin-bottom: 0.5rem; line-height: 1.6; }
-        .prose strong { color: #f8fafc; font-weight: 600; }
-        .prose a { color: #8b5cf6; text-decoration: none; transition: color 0.2s; }
-        .prose a:hover { color: #a78bfa; text-decoration: underline; }
-        .prose code { background: rgba(255,255,255,0.1); padding: 0.2em 0.4em; border-radius: 0.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.875em; color: #a78bfa; }
-        
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+            background-size: 42px 42px;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0.75), transparent 70%);
+        }
+
+        .shell {
+            max-width: 1520px;
+            margin: 0 auto;
+        }
+
+        .glass {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            box-shadow: 0 20px 70px rgba(0, 0, 0, 0.28);
+            backdrop-filter: blur(18px);
+        }
+
         .nav-link {
-            transition: all 0.2s ease;
+            display: block;
             border-left: 2px solid transparent;
-        }
-        .nav-link:hover {
-            border-left-color: #8b5cf6;
-            background: rgba(139, 92, 246, 0.1);
-            color: #fff;
-        }
-        .nav-link.active {
-            border-left-color: #6366f1;
-            background: rgba(99, 102, 241, 0.15);
-            color: #fff;
-            font-weight: 600;
+            color: var(--muted);
+            padding: 0.45rem 0.8rem;
+            border-radius: 0 0.7rem 0.7rem 0;
+            font-size: 0.88rem;
+            transition: 160ms ease;
         }
 
-        .gradient-text {
-            background: linear-gradient(to right, #a855f7, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        .nav-link:hover,
+        .nav-link.active {
+            color: white;
+            background: rgba(24, 194, 167, 0.1);
+            border-left-color: var(--brand);
+        }
+
+        article h2 {
+            margin-top: 4.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--line);
+            color: white;
+            font-size: clamp(1.8rem, 3vw, 2.5rem);
+            line-height: 1.12;
+            font-weight: 850;
+            letter-spacing: -0.04em;
+        }
+
+        article h3 {
+            margin-top: 2.4rem;
+            color: #f8fafc;
+            font-size: 1.35rem;
+            line-height: 1.25;
+            font-weight: 780;
+            letter-spacing: -0.025em;
+        }
+
+        article h4 {
+            margin-top: 1.7rem;
+            color: #dffcf7;
+            font-size: 1.02rem;
+            font-weight: 750;
+            letter-spacing: -0.01em;
+        }
+
+        article p,
+        article li {
+            color: var(--soft);
+        }
+
+        article a {
+            color: #67e8f9;
+            text-decoration: none;
+        }
+
+        article a:hover {
+            text-decoration: underline;
+        }
+
+        code {
+            background: rgba(8, 15, 28, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 0.35rem;
+            color: #a7f3d0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.88em;
+            padding: 0.14rem 0.34rem;
+        }
+
+        pre {
+            overflow-x: auto;
+            background: var(--code);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 1rem;
+            color: #dbeafe;
+            margin: 1rem 0 1.5rem;
+            padding: 1.1rem;
+        }
+
+        pre code {
+            background: transparent;
+            border: 0;
+            color: inherit;
+            padding: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0 1.5rem;
+            overflow: hidden;
+            border-radius: 0.9rem;
+            font-size: 0.92rem;
+        }
+
+        th,
+        td {
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            padding: 0.78rem 0.85rem;
+            vertical-align: top;
+        }
+
+        th {
+            background: rgba(24, 194, 167, 0.12);
+            color: white;
+            font-weight: 750;
+            text-align: left;
+        }
+
+        td {
+            background: rgba(15, 23, 42, 0.42);
+            color: var(--soft);
+        }
+
+        .callout {
+            border: 1px solid rgba(24, 194, 167, 0.26);
+            background: linear-gradient(135deg, rgba(24, 194, 167, 0.12), rgba(56, 189, 248, 0.06));
+            border-radius: 1rem;
+            padding: 1rem;
+            margin: 1rem 0 1.5rem;
+        }
+
+        .warning {
+            border-color: rgba(251, 113, 133, 0.38);
+            background: linear-gradient(135deg, rgba(251, 113, 133, 0.12), rgba(245, 158, 11, 0.07));
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 999px;
+            color: #d7fff8;
+            background: rgba(15, 23, 42, 0.62);
+            font-size: 0.76rem;
+            font-weight: 760;
+            letter-spacing: 0.02em;
+            padding: 0.22rem 0.55rem;
+            margin: 0.15rem;
+        }
+
+        .doc-section {
+            scroll-margin-top: 96px;
+        }
+
+        .kbd {
+            border-bottom: 2px solid rgba(148, 163, 184, 0.45);
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 0.4rem;
+            padding: 0.08rem 0.38rem;
+        }
+
+        .screen-card {
+            min-height: 11rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background:
+                linear-gradient(135deg, rgba(24, 194, 167, 0.14), transparent),
+                rgba(15, 23, 42, 0.52);
+            padding: 1rem;
+        }
+
+        .print-only {
+            display: none;
+        }
+
+        @media print {
+            body {
+                background: white;
+                color: #111827;
+            }
+            body::before,
+            header,
+            aside,
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block;
+            }
+            article h2,
+            article h3,
+            article h4,
+            article p,
+            article li,
+            td,
+            th {
+                color: #111827;
+            }
+            pre,
+            code,
+            td,
+            th,
+            .glass,
+            .callout,
+            .screen-card {
+                background: white;
+                border-color: #d1d5db;
+                box-shadow: none;
+            }
         }
     </style>
 </head>
-<body class="antialiased min-h-screen flex flex-col">
-
-    <!-- Header -->
-    <header class="w-full px-8 py-4 flex justify-between items-center border-b border-white/5 bg-darkBg/80 backdrop-blur-md sticky top-0 z-50">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                <i data-lucide="book-open" class="w-4 h-4 text-white"></i>
+<body>
+    <header class="sticky top-0 z-50 border-b border-slate-700/40 bg-slate-950/75 backdrop-blur-xl no-print">
+        <div class="shell px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex items-center gap-3">
+                <div class="h-11 w-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-sky-400 grid place-items-center text-slate-950 font-black">PRI</div>
+                <div>
+                    <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/80 font-bold">Documentation Center</p>
+                    <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white">Purplle Retail Intelligence</h1>
+                </div>
             </div>
-            <div>
-                <h1 class="text-lg font-bold text-white leading-tight">Intelligence Docs</h1>
-                <p class="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Purplle Retail</p>
+            <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <label class="relative block">
+                    <i data-lucide="search" class="absolute left-3 top-2.5 h-4 w-4 text-slate-400"></i>
+                    <input id="doc-search" type="search" placeholder="Search docs..." class="w-full sm:w-80 rounded-xl border border-slate-700 bg-slate-950/70 py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-emerald-300">
+                </label>
+                <a href="/dashboard" class="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-sm font-bold text-emerald-100 hover:bg-emerald-400/20">
+                    <i data-lucide="layout-dashboard" class="h-4 w-4"></i>
+                    Dashboard
+                </a>
+                <a href="/docs" class="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-300/25 bg-sky-400/10 px-4 py-2 text-sm font-bold text-sky-100 hover:bg-sky-400/20">
+                    <i data-lucide="code-2" class="h-4 w-4"></i>
+                    Swagger
+                </a>
             </div>
         </div>
-        <a href="/dashboard" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-slate-300 transition-colors flex items-center gap-2">
-            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-            Back to Dashboard
-        </a>
     </header>
 
-    <!-- Main Content Layout -->
-    <div class="flex-1 flex w-full max-w-7xl mx-auto">
-        
-        <!-- Sidebar Navigation -->
-        <aside class="w-64 flex-shrink-0 border-r border-white/5 py-8 hidden md:block sticky top-[73px] h-[calc(100vh-73px)] overflow-y-auto">
-            <div class="px-6 mb-6">
-                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Contents</h3>
-                <nav class="space-y-1">
-                    <a href="#quick-guide" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Quick Guide</a>
-                    <a href="#problem-statement" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">The Problem</a>
-                    <a href="#business-impact" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Business Impact</a>
-                    <a href="#industry-usage" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Industry Usage</a>
-                    <a href="#architecture" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Architecture</a>
-                    <a href="#scalability" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Scalability</a>
-                    <a href="#reliability" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Reliability</a>
-                    <a href="#multi-device" class="nav-link block px-4 py-2 text-sm text-slate-400 rounded-r-lg">Multi-Device Config</a>
-                </nav>
-            </div>
-        </aside>
-
-        <!-- Document Content -->
-        <main class="flex-1 px-8 py-10 md:py-12 max-w-4xl">
-            <div class="prose max-w-none">
-                
-                <h1 class="gradient-text text-5xl mb-4">Purplle Retail Intelligence</h1>
-                <p class="text-lg text-slate-300 mb-12">A state-of-the-art Computer Vision & Spatial Analytics platform designed to transform raw CCTV footage into actionable operational intelligence for physical retail stores.</p>
-
-                <!-- QUICK GUIDE -->
-                <section id="quick-guide" class="scroll-mt-24">
-                    <h2>🚀 Quick Guide</h2>
-                    <p>Designed for both technical operators and store executives, getting started takes only a few steps.</p>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 mb-8">
-                        <div class="glass-panel p-6 rounded-xl">
-                            <h3 class="text-indigo-400 mt-0 flex items-center gap-2"><i data-lucide="play-circle" class="w-5 h-5"></i> For Non-Tech Users</h3>
-                            <p class="text-sm"><strong>1. Dashboard View:</strong> Access the main UI. You are in <em>Executive Mode</em> by default, seeing high-level metrics (Footfall, Dwell Time, Heatmaps).</p>
-                            <p class="text-sm"><strong>2. View Heatmaps:</strong> Click the <em>Heatmap</em> tab to see where customers spend the most time.</p>
-                            <p class="text-sm"><strong>3. Live Feed:</strong> Watch the <em>Event Feed</em> on the right to see customers entering, dwelling, and queueing in real-time.</p>
+    <div class="shell px-4 sm:px-6 lg:px-8">
+        <section class="py-10 lg:py-14">
+            <div class="glass rounded-[2rem] p-6 sm:p-10 lg:p-12 overflow-hidden relative">
+                <div class="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-400/20 blur-3xl"></div>
+                <div class="absolute -bottom-28 left-1/3 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl"></div>
+                <div class="relative max-w-5xl">
+                    <div class="flex flex-wrap gap-2 mb-5">
+                        <span class="tag">FastAPI</span>
+                        <span class="tag">YOLO11n + ByteTrack</span>
+                        <span class="tag">SQLite</span>
+                        <span class="tag">Docker</span>
+                        <span class="tag">Retail CV Analytics</span>
+                    </div>
+                    <h2 class="text-4xl sm:text-6xl lg:text-7xl font-black leading-[0.95] tracking-[-0.06em] text-white">
+                        Turn CCTV footage into store operations intelligence.
+                    </h2>
+                    <p class="mt-6 max-w-3xl text-lg text-slate-200">
+                        This guide explains how Purplle Retail Intelligence works, how to run it, how to use the dashboard, how to integrate with the API, and how to operate it safely in production-like environments.
+                    </p>
+                    <p class="mt-4 max-w-3xl text-sm text-slate-300">
+                        Built and maintained by <strong>Keshab Kumar</strong> <strong>@keshabkjha</strong>.
+                        Official links:
+                        <a href="https://linktr.ee/Keshabkjha" target="_blank" rel="me noopener noreferrer">Linktree</a>,
+                        <a href="https://www.linkedin.com/in/keshabkjha" target="_blank" rel="me noopener noreferrer">LinkedIn</a>,
+                        <a href="https://github.com/Keshabkjha" target="_blank" rel="me noopener noreferrer">GitHub</a>,
+                        <a href="https://leetcode.com/u/Keshabkjha/" target="_blank" rel="me noopener noreferrer">LeetCode</a>,
+                        <a href="https://codeforces.com/profile/keshabkjha" target="_blank" rel="me noopener noreferrer">Codeforces</a>,
+                        <a href="https://www.kaggle.com/keshabkkumar" target="_blank" rel="me noopener noreferrer">Kaggle</a>,
+                        <a href="https://codolio.com/profile/Keshabkjha" target="_blank" rel="me noopener noreferrer">Codolio</a>,
+                        <a href="https://wakatime.com/@Keshabkjha" target="_blank" rel="me noopener noreferrer">WakaTime</a>.
+                    </p>
+                    <div class="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="screen-card">
+                            <p class="text-sm uppercase tracking-widest text-emerald-200 font-black">First success</p>
+                            <p class="mt-2 text-3xl font-black text-white">5 min</p>
+                            <p class="text-sm text-slate-300">Start API, load dashboard, run a clip, inspect KPIs.</p>
                         </div>
-                        <div class="glass-panel p-6 rounded-xl">
-                            <h3 class="text-pink-400 mt-0 flex items-center gap-2"><i data-lucide="terminal" class="w-5 h-5"></i> For Tech Experts</h3>
-                            <p class="text-sm"><strong>1. Run API:</strong> <code>./run-api.sh</code> starts the FastAPI backend on port 8000.</p>
-                            <p class="text-sm"><strong>2. Run Pipeline:</strong> Execute <code>python pipeline/detect.py</code> to process raw MP4 files. This parses YOLO detections into JSON events.</p>
-                            <p class="text-sm"><strong>3. Engineer Mode:</strong> Toggle "Engineer Mode" in the UI to view raw bounding boxes, raw event JSON feeds, and zone overlays.</p>
+                        <div class="screen-card">
+                            <p class="text-sm uppercase tracking-widest text-emerald-200 font-black">Stores</p>
+                            <p class="mt-2 text-3xl font-black text-white">2</p>
+                            <p class="text-sm text-slate-300">ST1008 Brigade Road and ST1076 Mumbai are configured.</p>
+                        </div>
+                        <div class="screen-card">
+                            <p class="text-sm uppercase tracking-widest text-emerald-200 font-black">Core APIs</p>
+                            <p class="mt-2 text-3xl font-black text-white">18+</p>
+                            <p class="text-sm text-slate-300">Health, ingest, KPIs, video, POS, simulation, UI routes.</p>
+                        </div>
+                        <div class="screen-card">
+                            <p class="text-sm uppercase tracking-widest text-emerald-200 font-black">Audience</p>
+                            <p class="mt-2 text-3xl font-black text-white">All roles</p>
+                            <p class="text-sm text-slate-300">Users, managers, admins, support, developers, DevOps, QA.</p>
                         </div>
                     </div>
-                </section>
+                </div>
+            </div>
+        </section>
 
-                <!-- THE PROBLEM -->
-                <section id="problem-statement" class="scroll-mt-24">
-                    <h2>🎯 The Problem It Solves</h2>
-                    <p>Physical retail suffers from a massive data deficit compared to e-commerce. While online stores track every click, hover, and bounce, physical stores are a "black box" once a customer walks through the door.</p>
-                    <ul>
-                        <li><strong>Layout Inefficiency:</strong> Retailers don't know which shelves attract attention but don't convert to sales.</li>
-                        <li><strong>Staff Allocation:</strong> Managers struggle to match staff schedules with real-time customer influx.</li>
-                        <li><strong>Queue Abandonment:</strong> Long lines at checkout lead to lost revenue, but managers are only aware <em>after</em> the queue has formed.</li>
-                        <li><strong>Manual Auditing:</strong> Relying on human security guards to manually watch CCTV arrays is expensive, error-prone, and unscalable.</li>
-                    </ul>
-                </section>
+        <div class="lg:grid lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
+            <aside class="hidden lg:block no-print">
+                <div class="sticky top-28 max-h-[calc(100vh-8rem)] overflow-y-auto pr-4 pb-10">
+                    <p class="mb-3 text-xs font-black uppercase tracking-[0.25em] text-slate-400">Contents</p>
+                    <nav id="toc" class="space-y-1">
+                        <a class="nav-link" href="#introduction">Introduction</a>
+                        <a class="nav-link" href="#quick-start">Quick Start</a>
+                        <a class="nav-link" href="#product-overview">Product Overview</a>
+                        <a class="nav-link" href="#user-guide">User Guide</a>
+                        <a class="nav-link" href="#roles">Role-Based Docs</a>
+                        <a class="nav-link" href="#features">Feature Docs</a>
+                        <a class="nav-link" href="#configuration">Configuration</a>
+                        <a class="nav-link" href="#api">API Reference</a>
+                        <a class="nav-link" href="#architecture">Architecture</a>
+                        <a class="nav-link" href="#database">Database</a>
+                        <a class="nav-link" href="#security">Security</a>
+                        <a class="nav-link" href="#deployment">Deployment</a>
+                        <a class="nav-link" href="#observability">Monitoring</a>
+                        <a class="nav-link" href="#troubleshooting">Troubleshooting</a>
+                        <a class="nav-link" href="#faq">FAQ</a>
+                        <a class="nav-link" href="#best-practices">Best Practices</a>
+                        <a class="nav-link" href="#release-notes">Release Notes</a>
+                        <a class="nav-link" href="#roadmap">Roadmap</a>
+                        <a class="nav-link" href="#developer-docs">Developer Docs</a>
+                        <a class="nav-link" href="#glossary">Glossary</a>
+                    </nav>
+                </div>
+            </aside>
 
-                <!-- BUSINESS IMPACT -->
-                <section id="business-impact" class="scroll-mt-24">
-                    <h2>💼 Business Impact: Before & After</h2>
-                    <div class="overflow-x-auto my-8">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="border-b border-white/10">
-                                    <th class="py-3 px-4 text-slate-300 font-bold">Metric / Area</th>
-                                    <th class="py-3 px-4 text-slate-400 font-medium">Before (Legacy Systems)</th>
-                                    <th class="py-3 px-4 text-indigo-400 font-bold">After (Purplle Intelligence)</th>
-                                </tr>
-                            </thead>
-                            <tbody class="text-sm">
-                                <tr class="border-b border-white/5">
-                                    <td class="py-3 px-4 font-semibold text-slate-200">Customer Tracking</td>
-                                    <td class="py-3 px-4 text-slate-400">Basic infrared beam counters at the door (highly inaccurate).</td>
-                                    <td class="py-3 px-4 text-indigo-200">Re-ID (Person Re-identification) tracking across multiple cameras.</td>
-                                </tr>
-                                <tr class="border-b border-white/5">
-                                    <td class="py-3 px-4 font-semibold text-slate-200">Store Layout</td>
-                                    <td class="py-3 px-4 text-slate-400">A/B testing relies on end-of-month sales data.</td>
-                                    <td class="py-3 px-4 text-indigo-200">Real-time spatial heatmaps reveal exactly where customers dwell instantly.</td>
-                                </tr>
-                                <tr class="border-b border-white/5">
-                                    <td class="py-3 px-4 font-semibold text-slate-200">Staffing</td>
-                                    <td class="py-3 px-4 text-slate-400">Staff and customers are mixed together in head-counts.</td>
-                                    <td class="py-3 px-4 text-indigo-200">AI automatically filters out staff via uniform detection; accurate customer metrics.</td>
-                                </tr>
-                                <tr>
-                                    <td class="py-3 px-4 font-semibold text-slate-200">Queue Management</td>
-                                    <td class="py-3 px-4 text-slate-400">Reactive—managers open registers when customers complain.</td>
-                                    <td class="py-3 px-4 text-indigo-200">Proactive—system detects "Dwell in Queue Zone" and alerts managers.</td>
-                                </tr>
+            <main class="min-w-0">
+                <article id="docs-article" class="glass rounded-[2rem] p-5 sm:p-8 lg:p-12 mb-16">
+                    <p class="print-only">Purplle Retail Intelligence Documentation Center</p>
+
+                    <section id="introduction" class="doc-section searchable">
+                        <h2>Introduction</h2>
+                        <p>
+                            Purplle Retail Intelligence is an end-to-end computer vision and retail analytics application. It converts CCTV or MP4 store footage into structured visitor events, saves those events through a FastAPI backend, and presents store KPIs in a browser dashboard.
+                        </p>
+                        <p>
+                            The system helps physical retail teams answer questions that are easy online but hard in stores: How many real customers entered? Which zones attracted attention? Where did shoppers drop out? Is the billing queue becoming a problem? Are staff members polluting customer counts?
+                        </p>
+
+                        <h3>Target Users</h3>
+                        <table>
+                            <thead><tr><th>User</th><th>What They Need</th><th>Where They Work</th></tr></thead>
+                            <tbody>
+                                <tr><td>Store teams</td><td>Live customer flow, queue state, and zone engagement.</td><td><code>/dashboard</code></td></tr>
+                                <tr><td>Managers</td><td>Conversion, dwell time, anomaly cards, and actionable recommendations.</td><td>Executive Mode dashboard and anomaly section.</td></tr>
+                                <tr><td>Administrators</td><td>Store layout, camera inventory, CORS, rate limits, data reset behavior.</td><td><code>config/store_layout.json</code>, environment variables.</td></tr>
+                                <tr><td>Developers</td><td>API contracts, event schema, local development, test commands.</td><td><code>/docs</code>, <code>app/</code>, <code>pipeline/</code>, tests.</td></tr>
+                                <tr><td>DevOps engineers</td><td>Docker, health probes, logs, rollout and rollback steps.</td><td><code>docker-compose.yml</code>, <code>api.Dockerfile</code>, stdout logs.</td></tr>
+                                <tr><td>QA engineers</td><td>Repeatable smoke tests, endpoint validation, expected error behavior.</td><td><code>tests/</code>, curl flows, Swagger UI.</td></tr>
                             </tbody>
                         </table>
-                    </div>
-                </section>
 
-                <!-- INDUSTRY USAGE -->
-                <section id="industry-usage" class="scroll-mt-24">
-                    <h2>🏢 Industry Usages</h2>
-                    <p>This repository represents an <strong>industry-standard, state-of-the-art</strong> approach to edge-AI computer vision. It mirrors architectures used by Amazon Go, Walmart Global Tech, and top-tier retail analytics firms.</p>
-                    <ul>
-                        <li><strong>Cosmetics & Beauty (Purplle/Sephora):</strong> Measuring dwell time at specific makeup tester stations.</li>
-                        <li><strong>Supermarkets:</strong> Analyzing cart paths to optimize end-cap promotional placements.</li>
-                        <li><strong>Apparel:</strong> Tracking the conversion funnel from "Browsing" to "Fitting Room" to "Checkout".</li>
-                        <li><strong>Loss Prevention:</strong> Anomaly detection spots unusual loitering near high-value merchandise.</li>
-                    </ul>
-                </section>
+                        <h3>Core Features</h3>
+                        <ul>
+                            <li>Person detection and tracking using YOLO11n and tracker IDs.</li>
+                            <li>Store layout mapping with zone polygons, camera roles, and optional homography calibration.</li>
+                            <li>Idempotent event ingestion through <code>POST /events/ingest</code>.</li>
+                            <li>Dashboard KPIs: unique visitors, conversion rate, average dwell, queue depth, and abandonment rate.</li>
+                            <li>Funnel, heatmap, recent event feed, per-camera stats, system telemetry, and anomaly cards.</li>
+                            <li>POS CSV loading and conversion matching within the analytics layer.</li>
+                            <li>Raw and annotated video streaming with HTTP range support.</li>
+                            <li>Docker-first runtime with health, readiness, and liveness probes.</li>
+                        </ul>
 
-                <hr class="my-12 border-white/10" />
+                        <h3>Key Differentiators</h3>
+                        <div class="callout">
+                            <p><strong>Business readable, engineering inspectable.</strong> The same application serves store leaders who need decisions and engineers who need raw event detail, traceability, and testable API contracts.</p>
+                        </div>
+                        <table>
+                            <thead><tr><th>Differentiator</th><th>Why It Matters</th></tr></thead>
+                            <tbody>
+                                <tr><td>Event-driven separation</td><td>The CV pipeline can run independently from the API and dashboard, making it easier to move detection to edge hardware later.</td></tr>
+                                <tr><td>Store-aware camera config</td><td>Each store defines its cameras, roles, folder, zones, floor plan dimensions, and polygons in one JSON file.</td></tr>
+                                <tr><td>Staff exclusion</td><td>Customer KPIs filter <code>is_staff = false</code>, reducing inflated footfall and dwell numbers.</td></tr>
+                                <tr><td>Honest production boundary</td><td>The repository ships reference defaults. Production teams should add auth, network controls, encrypted storage, and shared rate limiting.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
 
-                <!-- ARCHITECTURE -->
-                <section id="architecture" class="scroll-mt-24">
-                    <h2>⚙️ System Architecture & Portability</h2>
-                    <p>The system is built as a decoupled, asynchronous, and highly portable platform.</p>
-                    
-                    <h3>1. Extreme Portability</h3>
-                    <p>The entire application is designed to run on the Edge (e.g., a localized store server or NVIDIA Jetson) or in the Cloud.</p>
-                    <ul>
-                        <li><strong>Dependency Isolation:</strong> Managed via strict <code>requirements.txt</code> with pinned versions.</li>
-                        <li><strong>OS Agnostic:</strong> Runs seamlessly on macOS (M-series CoreML), Linux (CUDA), and Windows. Path handling uses robust <code>os.path</code> standard libraries, bypassing OS-specific slash issues.</li>
-                        <li><strong>Zero-Config Database:</strong> Uses SQLite for portability. You do not need to stand up a complex PostgreSQL cluster to deploy a store. A single `.db` file holds all analytical metrics, making backups as simple as a file copy.</li>
-                    </ul>
+                    <section id="quick-start" class="doc-section searchable">
+                        <h2>Quick Start</h2>
+                        <p>This path gets a new user from zero to live dashboard validation quickly.</p>
 
-                    <h3>2. Scalability</h3>
-                    <p>Can this handle a busy store with thousands of events?</p>
-                    <ul>
-                        <li><strong>Asynchronous Backend:</strong> The FastAPI backend uses <code>async/await</code> extensively. It can ingest thousands of JSON events per second from the CV pipeline without blocking UI requests.</li>
-                        <li><strong>Batch Processing:</strong> The CV pipeline does not hit the database for every single frame. It buffers tracking states in memory and performs bulk inserts, drastically reducing I/O overhead.</li>
-                        <li><strong>Adaptive Inference:</strong> The pipeline dynamically scales image resolution and skip-frames based on hardware capability (CPU vs MPS vs CUDA).</li>
-                    </ul>
-                </section>
+                        <h3>Prerequisites</h3>
+                        <table>
+                            <thead><tr><th>Tool</th><th>Required For</th><th>Notes</th></tr></thead>
+                            <tbody>
+                                <tr><td>Docker + Docker Compose</td><td>Recommended app runtime.</td><td>Uses <code>api.Dockerfile</code> and <code>docker-compose.yml</code>.</td></tr>
+                                <tr><td>Python 3.11+</td><td>Local API, tests, and pipeline.</td><td>Python 3.11 is the Docker base image.</td></tr>
+                                <tr><td>ffmpeg / OpenCV system libs</td><td>Video processing.</td><td>Installed in the Docker image.</td></tr>
+                                <tr><td>Sample videos</td><td>Simulation and video streaming.</td><td>Repository includes <code>Store 1</code>, <code>Store 2</code>, and <code>CCTV Footage</code> clips.</td></tr>
+                            </tbody>
+                        </table>
 
-                <!-- RELIABILITY -->
-                <section id="reliability" class="scroll-mt-24">
-                    <h2>🛡️ Reliability & Security</h2>
-                    <p>Enterprise software must be resilient to failures and secure against intrusions.</p>
-                    <ul>
-                        <li><strong>WAL Mode:</strong> The SQLite database is configured with Write-Ahead Logging (WAL). This ensures that heavy read operations (the Dashboard polling) do not block heavy write operations (the Pipeline ingesting), preventing database locking errors.</li>
-                        <li><strong>Robust Error Handling:</strong> The Pos Loader and Event Ingestion engines wrap operations in transactional blocks. If a corrupt CSV or malformed JSON is uploaded, the transaction rolls back, preventing database corruption.</li>
-                        <li><strong>Security Hardened:</strong> 
-                            <ul>
-                                <li><strong>XSS Prevention:</strong> The UI employs strict DOM sanitization (<code>escapeHtml</code>) before rendering any user-sourced data (like Camera IDs or Event Labels) into the DOM.</li>
-                                <li><strong>Path Traversal Protection:</strong> API endpoints strictly validate video file paths against a secure base directory, preventing malicious actors from accessing system files like `/etc/passwd`.</li>
-                                <li><strong>SQL Injection:</strong> All database queries utilize SQLAlchemy's ORM or parameterized execution. Zero string-concatenation SQL queries exist in the codebase.</li>
-                            </ul>
-                        </li>
-                    </ul>
-                </section>
+                        <h3>Fastest Path</h3>
+                        <pre><code class="language-bash">docker build -f api.Dockerfile -t store-intelligence .
+docker compose up api
 
-                <!-- MULTI DEVICE -->
-                <section id="multi-device" class="scroll-mt-24 mb-20">
-                    <h2>📷 Multi-Device Configuration</h2>
-                    <p>Real stores do not have just one camera. They have arrays of cameras covering different zones.</p>
-                    <ul>
-                        <li><strong>Zone Mapping:</strong> The application maps raw (x,y) pixel coordinates from multiple cameras into a unified store layout.</li>
-                        <li><strong>Camera Agnostic:</strong> The pipeline accepts an arbitrary number of RTSP streams or MP4 files. Each camera registers its events tagged with a unique <code>camera_id</code>.</li>
-                        <li><strong>Global Unique Identifiers:</strong> Person Re-Identification (ReID) ensures that if "Visitor 42" leaves Camera A's FOV and enters Camera B's FOV, they are tracked as the same session, rather than generating duplicate footfall counts.</li>
-                    </ul>
-                </section>
+# In another terminal:
+curl http://localhost:8000/health
+open http://localhost:8000/dashboard</code></pre>
 
-            </div>
-        </main>
+                        <h3>First Workflow</h3>
+                        <ol>
+                            <li>Open <code>http://localhost:8000/dashboard</code>.</li>
+                            <li>Choose a store and camera from the dashboard controls.</li>
+                            <li>Use the video simulation panel to process an available clip.</li>
+                            <li>Watch the simulation progress until it finishes or reports cache reuse.</li>
+                            <li>Review KPI cards, funnel, heatmap, anomalies, and recent events.</li>
+                            <li>Open <code>http://localhost:8000/guide</code> for this documentation and <code>http://localhost:8000/docs</code> for Swagger.</li>
+                        </ol>
+
+                        <h3>Example Use Case</h3>
+                        <p>
+                            A manager wants to know if a billing queue is hurting conversion. They open the dashboard, filter to the billing camera, run or inspect the billing clip, check <strong>Current Queue Depth</strong>, inspect <strong>Abandonment Rate</strong>, and review anomaly cards. If a queue spike appears, the suggested action is to open another billing counter or assign staff to checkout.
+                        </p>
+
+                        <h3>Local Development Alternative</h3>
+                        <pre><code class="language-bash">pip install -r requirements-dev.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python3 pipeline/detect.py "Store 1/CAM 3 - entry.mp4"
+python3 -m pytest tests/ -v</code></pre>
+                    </section>
+
+                    <section id="product-overview" class="doc-section searchable">
+                        <h2>Product Overview</h2>
+                        <h3>Main Modules</h3>
+                        <table>
+                            <thead><tr><th>Module</th><th>Purpose</th><th>Primary Files</th></tr></thead>
+                            <tbody>
+                                <tr><td>Computer vision pipeline</td><td>Reads videos, tracks people, maps coordinates to zones, emits events.</td><td><code>pipeline/detect.py</code>, <code>pipeline/adaptive_models.py</code></td></tr>
+                                <tr><td>API server</td><td>Validates events, stores data, computes KPIs, serves UI and videos.</td><td><code>app/main.py</code></td></tr>
+                                <tr><td>Analytics services</td><td>Compute metrics, funnel, heatmap, anomalies.</td><td><code>app/metrics.py</code>, <code>app/funnel.py</code>, <code>app/heatmap.py</code>, <code>app/anomalies.py</code></td></tr>
+                                <tr><td>Persistence</td><td>SQLite database and SQLAlchemy models for events and POS transactions.</td><td><code>app/database.py</code></td></tr>
+                                <tr><td>Dashboard</td><td>Self-contained HTML/JS control room.</td><td><code>app/dashboard.html</code></td></tr>
+                                <tr><td>Documentation</td><td>This in-app documentation center.</td><td><code>app/docs.html</code></td></tr>
+                                <tr><td>Configuration</td><td>Store, camera, role, and zone definitions.</td><td><code>config/store_layout.json</code></td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Business Workflow</h3>
+                        <pre class="mermaid">flowchart LR
+    A[Store CCTV or MP4] -- process --> B[Detection pipeline]
+    B -- visitor events --> C[FastAPI ingest]
+    C -- persist --> D[(SQLite)]
+    D -- aggregate --> E[Metrics, funnel, heatmap, anomalies]
+    E -- display --> F[Dashboard]
+    G[POS CSV] -- load --> D
+    F -- actions --> H[Staffing, layout, queue, merchandising decisions]</pre>
+
+                        <h3>User Journeys</h3>
+                        <table>
+                            <thead><tr><th>Journey</th><th>Start</th><th>Success Looks Like</th></tr></thead>
+                            <tbody>
+                                <tr><td>Store monitoring</td><td>Open dashboard.</td><td>KPI cards update, event feed moves, anomalies show clear actions.</td></tr>
+                                <tr><td>Camera drilldown</td><td>Select camera from store camera cards.</td><td>Metrics, events, heatmap, and video focus on that camera.</td></tr>
+                                <tr><td>New footage simulation</td><td>Choose a video and click simulation.</td><td>Events are ingested or cache indicates the clip was already processed.</td></tr>
+                                <tr><td>API integration</td><td>Post a valid event batch.</td><td><code>207</code> response shows ingested and failed counts.</td></tr>
+                                <tr><td>Production readiness check</td><td>Call <code>/health</code>, <code>/ready</code>, and logs.</td><td>Database is healthy, probes respond, structured logs contain trace IDs.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="user-guide" class="doc-section searchable">
+                        <h2>User Guide</h2>
+                        <h3>Dashboard Access</h3>
+                        <table>
+                            <thead><tr><th>Item</th><th>Details</th></tr></thead>
+                            <tbody>
+                                <tr><td>Purpose</td><td>Live operations view for store health, customer behavior, and diagnostics.</td></tr>
+                                <tr><td>Access</td><td>Open <code>/dashboard</code> from the browser or click <strong>Dashboard</strong> in this documentation header.</td></tr>
+                                <tr><td>How to use</td><td>Select store/camera, run simulation if needed, review cards, inspect funnel and heatmap, check anomalies, and use Engineer Mode for telemetry.</td></tr>
+                                <tr><td>Example</td><td>Use ST1008 plus CAM5 to review billing queue behavior.</td></tr>
+                                <tr><td>Tips</td><td>Run entry camera footage first when measuring store-level footfall. Use camera filters for zone-specific debugging.</td></tr>
+                                <tr><td>Limitations</td><td>The dashboard polls REST endpoints. It is not currently backed by WebSockets or Redis pub/sub.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Screen Map</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="screen-card">
+                                <h4>Executive Mode</h4>
+                                <p>Shows business KPIs, funnel, heatmap, video playback, anomaly cards, and recent event feed. Use it for daily operations reviews.</p>
+                            </div>
+                            <div class="screen-card">
+                                <h4>Engineer Mode</h4>
+                                <p>Reveals system telemetry, calibration-oriented overlays, health detail, query latency, database size, and technical diagnostics.</p>
+                            </div>
+                            <div class="screen-card">
+                                <h4>Video Panel</h4>
+                                <p>Streams raw or annotated MP4 files through range-capable endpoints. Annotated footage appears when a matching <code>annotated_</code> file exists.</p>
+                            </div>
+                            <div class="screen-card">
+                                <h4>Simulation Panel</h4>
+                                <p>Calls <code>POST /api/simulate</code> and polls <code>GET /api/simulation_status</code> for background processing status.</p>
+                            </div>
+                        </div>
+
+                        <h3>Common Tasks</h3>
+                        <table>
+                            <thead><tr><th>Task</th><th>Steps</th><th>Verification</th></tr></thead>
+                            <tbody>
+                                <tr><td>Check if the app is healthy</td><td>Open <code>/health</code> or use the dashboard health indicators.</td><td>Response has <code>"status": "healthy"</code> and database is healthy.</td></tr>
+                                <tr><td>Review customer conversion</td><td>Open dashboard, choose store, inspect conversion card and funnel chart.</td><td><code>/stores/{store_id}/metrics</code> and <code>/funnel</code> return non-zero data after events and POS are loaded.</td></tr>
+                                <tr><td>Find low-performing zones</td><td>Use heatmap tab and sort by visit count/intensity.</td><td>Zones have <code>visit_count</code>, <code>average_dwell_seconds</code>, and <code>intensity</code>.</td></tr>
+                                <tr><td>Investigate queue pressure</td><td>Select billing camera, inspect queue depth and anomalies.</td><td>Anomaly type may be <code>BILLING_QUEUE_SPIKE</code> or <code>STATISTICAL_QUEUE_SPIKE</code>.</td></tr>
+                                <tr><td>Validate a video exists</td><td>Use dashboard video picker or call <code>/api/videos</code>.</td><td>Response lists filename, path, folder, and inferred store ID.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="roles" class="doc-section searchable">
+                        <h2>Role-Based Documentation</h2>
+                        <table>
+                            <thead><tr><th>Role</th><th>Can Do</th><th>Should Avoid</th><th>Primary Metrics</th></tr></thead>
+                            <tbody>
+                                <tr><td>End Users</td><td>View dashboard, understand KPIs, inspect heatmaps and anomalies.</td><td>Changing environment variables or store config.</td><td>Visitors, dwell, queue depth, conversion.</td></tr>
+                                <tr><td>Managers</td><td>Use anomaly actions, compare zones, decide staffing and merchandising changes.</td><td>Treating low-confidence or low-sample heatmaps as final truth.</td><td>Funnel dropoff, abandonment, dead zones.</td></tr>
+                                <tr><td>Administrators</td><td>Configure stores, cameras, CORS, rate limits, batch limits, and database behavior.</td><td>Using <code>ALLOWED_ORIGINS=*</code> in production without an explicit decision.</td><td>Health status, stale feed, API errors.</td></tr>
+                                <tr><td>Support Teams</td><td>Collect logs, reproduce dashboard issues, check health probes and simulation status.</td><td>Deleting database files before capturing impact details.</td><td>Trace ID, endpoint, status code, latency.</td></tr>
+                                <tr><td>Developers</td><td>Add endpoints, tests, event fields, UI panels, and analytics logic.</td><td>Changing event contracts without updating tests and docs.</td><td>Test coverage, schema validation, API responses.</td></tr>
+                                <tr><td>System Owners</td><td>Approve data retention, security controls, deployment topology, and roadmap priorities.</td><td>Running public deployments without authentication and network restrictions.</td><td>Availability, risk posture, operational adoption.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="features" class="doc-section searchable">
+                        <h2>Feature Documentation</h2>
+
+                        <h3>Event Ingestion</h3>
+                        <p><strong>Overview:</strong> The API accepts batches of visitor events, validates them with Pydantic, normalizes event type aliases, and writes idempotently by <code>event_id</code>.</p>
+                        <p><strong>Workflow:</strong> Pipeline detects movement, emits JSON, posts to <code>/events/ingest</code>, database stores valid rows, failed rows are reported in the same response.</p>
+                        <p><strong>Inputs:</strong> Array of event objects matching <code>EventSchema</code>.</p>
+                        <p><strong>Outputs:</strong> <code>{"ingested": n, "failed": n, "errors": [...]}</code>.</p>
+                        <p><strong>Configuration:</strong> <code>MAX_INGEST_BATCH</code>, <code>RATE_LIMIT_PER_MINUTE</code>, <code>INGEST_URL</code>.</p>
+                        <p><strong>FAQ:</strong> Duplicate event IDs count as successful ingestion because the endpoint is idempotent.</p>
+
+                        <h3>Metrics</h3>
+                        <p><strong>Overview:</strong> Computes unique visitors, conversion rate, average dwell, dwell per zone, current queue depth, and abandonment rate.</p>
+                        <p><strong>Workflow:</strong> Filters out staff, groups by visitor ID, detects billing events, matches POS timestamps within a five-minute window, and calculates rates.</p>
+                        <p><strong>Inputs:</strong> Store ID and optional camera ID.</p>
+                        <p><strong>Outputs:</strong> JSON KPI object for dashboard cards.</p>
+                        <p><strong>Limitations:</strong> Conversion depends on POS data being loaded and timestamp alignment being reasonable.</p>
+
+                        <h3>Funnel</h3>
+                        <p><strong>Overview:</strong> Tracks progression from entry to retail zone visit to billing queue to purchase.</p>
+                        <p><strong>Workflow:</strong> Entry camera visitors form the base. Zone visits and billing events advance users through stages. POS matching indicates purchase.</p>
+                        <p><strong>Outputs:</strong> Stage counts and dropoff percentages.</p>
+
+                        <h3>Heatmap</h3>
+                        <p><strong>Overview:</strong> Summarizes zone engagement by visits, average dwell seconds, and relative intensity.</p>
+                        <p><strong>Workflow:</strong> Reads non-staff events with zone IDs, excludes entry and exit zones, aggregates by zone, and computes intensity against the busiest zone.</p>
+                        <p><strong>Limitations:</strong> <code>data_confidence</code> becomes true only after at least 20 unique sessions.</p>
+
+                        <h3>Anomaly Detection</h3>
+                        <p><strong>Overview:</strong> Produces operational warnings for queue spikes, conversion drops, and dead zones.</p>
+                        <table>
+                            <thead><tr><th>Anomaly</th><th>Trigger</th><th>Action</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>STATISTICAL_QUEUE_SPIKE</code></td><td>Current queue depth exceeds a seven-day rolling threshold when enough queue history exists.</td><td>Open additional billing counter.</td></tr>
+                                <tr><td><code>BILLING_QUEUE_SPIKE</code></td><td>Fallback threshold: queue depth at least 5 warns, at least 8 is critical.</td><td>Monitor or immediately add checkout capacity.</td></tr>
+                                <tr><td><code>CONVERSION_DROP</code></td><td>Current conversion is more than 30 percent below seven-day baseline, or low with enough traffic when no baseline exists.</td><td>Check checkout bottlenecks and staff availability.</td></tr>
+                                <tr><td><code>DEAD_ZONE</code></td><td>Retail zone receives zero visits in the recent 30-minute window while the store has traffic.</td><td>Inspect visibility, display, stock, or signage.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>POS Loading</h3>
+                        <p><strong>Overview:</strong> Loads CSV transaction data from project-root files matching <code>POS*.csv</code>, <code>pos*.csv</code>, or <code>*transactions*.csv</code>.</p>
+                        <p><strong>Workflow:</strong> Call <code>POST /api/load-pos</code>. The loader parses actual Purplle-style columns and filters zero-amount loyalty card scans.</p>
+                        <p><strong>Outputs:</strong> Per-file processing result.</p>
+
+                        <h3>Video Streaming and Simulation</h3>
+                        <p><strong>Overview:</strong> The dashboard lists available MP4 clips, streams them with range requests, checks for annotated videos, and can start background detection.</p>
+                        <p><strong>Limitations:</strong> Safe path resolution strips directory components for stream endpoints. Duplicate filenames across directories can be ambiguous for direct stream calls.</p>
+                    </section>
+
+                    <section id="configuration" class="doc-section searchable">
+                        <h2>Configuration Guide</h2>
+                        <h3>Environment Variables</h3>
+                        <table>
+                            <thead><tr><th>Name</th><th>Purpose</th><th>Allowed Values</th><th>Default</th><th>Example</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>DATABASE_URL</code></td><td>Database connection string.</td><td>SQLAlchemy URL. SQLite is the shipped path.</td><td><code>sqlite:///./store_intelligence.db</code></td><td><code>sqlite:///./store_intelligence.db</code></td></tr>
+                                <tr><td><code>ENV</code></td><td>Environment label returned in system stats.</td><td>Any short string.</td><td><code>dev</code></td><td><code>prod</code></td></tr>
+                                <tr><td><code>ALLOWED_ORIGINS</code></td><td>CORS allowlist.</td><td>Comma-separated origins. If unset, local origins are used.</td><td><code>http://localhost:3000,http://localhost:8000</code> when unset; compose sets <code>*</code>.</td><td><code>https://retail.example.com</code></td></tr>
+                                <tr><td><code>RATE_LIMIT_PER_MINUTE</code></td><td>Per-IP API rate limit.</td><td>Integer. <code>0</code> disables limiter.</td><td><code>0</code></td><td><code>120</code></td></tr>
+                                <tr><td><code>RATE_LIMIT_WINDOW_SECONDS</code></td><td>Rate limit window length.</td><td>Positive integer seconds.</td><td><code>60</code></td><td><code>60</code></td></tr>
+                                <tr><td><code>MAX_INGEST_BATCH</code></td><td>Maximum event objects accepted per ingest request.</td><td>Positive integer.</td><td><code>500</code></td><td><code>200</code></td></tr>
+                                <tr><td><code>MAX_REQUEST_BODY_BYTES</code></td><td>Rejects oversized HTTP request bodies before route handling.</td><td>Positive integer bytes.</td><td><code>5242880</code></td><td><code>10485760</code></td></tr>
+                                <tr><td><code>API_KEY</code></td><td>Enables API-key protection for write/admin endpoints when set.</td><td>Secret string. Send as <code>X-API-Key</code> or <code>Authorization: Bearer ...</code>.</td><td>Unset, disabled for local demos.</td><td><code>openssl rand -hex 32</code></td></tr>
+                                <tr><td><code>ALLOWED_HOSTS</code></td><td>Optional host header allowlist to reduce host-header abuse.</td><td>Comma-separated hostnames without ports.</td><td>Unset, disabled.</td><td><code>your-space.hf.space,localhost</code></td></tr>
+                                <tr><td><code>APP_PUBLIC_BASE_URL</code></td><td>Canonical public URL used by sitemap, landing page, and SEO metadata.</td><td>Absolute URL without trailing slash.</td><td><code>http://localhost:8000</code></td><td><code>https://your-space.hf.space</code></td></tr>
+                                <tr><td><code>ENABLE_HSTS</code></td><td>Forces Strict-Transport-Security header outside <code>ENV=prod</code>.</td><td><code>0</code> or <code>1</code>.</td><td><code>0</code></td><td><code>1</code></td></tr>
+                                <tr><td><code>RESET_DB_ON_STARTUP</code></td><td>Controls default SQLite reset during API startup.</td><td><code>1</code> reset, <code>0</code> preserve.</td><td><code>1</code></td><td><code>0</code> for persistent local demos.</td></tr>
+                                <tr><td><code>PORT</code></td><td>Container HTTP port.</td><td>Integer port.</td><td><code>8080</code> in Dockerfile; compose sets <code>8000</code>.</td><td><code>8000</code></td></tr>
+                                <tr><td><code>INGEST_URL</code></td><td>Pipeline target for event posting.</td><td>HTTP URL.</td><td><code>http://localhost:8000/events/ingest</code></td><td><code>http://api:8000/events/ingest</code></td></tr>
+                                <tr><td><code>STORE_ID</code></td><td>Fallback store ID for pipeline camera resolution.</td><td>Configured store ID.</td><td><code>ST1008</code></td><td><code>ST1076</code></td></tr>
+                                <tr><td><code>STORE_CODE</code></td><td>Fallback store code for pipeline metadata.</td><td>Configured store code.</td><td><code>store_1008</code></td><td><code>store_1076</code></td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Store Layout</h3>
+                        <p>Store configuration lives in <code>config/store_layout.json</code>.</p>
+                        <table>
+                            <thead><tr><th>Field</th><th>Purpose</th><th>Current Values</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>stores[].store_id</code></td><td>Analytics partition key.</td><td><code>ST1008</code>, <code>ST1076</code></td></tr>
+                                <tr><td><code>stores[].cameras</code></td><td>Maps camera IDs to video filenames.</td><td>Entry, zone, and billing cameras per store.</td></tr>
+                                <tr><td><code>stores[].camera_roles</code></td><td>Identifies each camera as <code>entry</code>, <code>zone</code>, or <code>billing</code>.</td><td>Used by metrics and camera cards.</td></tr>
+                                <tr><td><code>stores[].zones</code></td><td>Defines zone ID, name, type, revenue flag, camera, and polygon coordinates.</td><td>Shelf, display, consultation, billing, and entry zones.</td></tr>
+                                <tr><td><code>default_store_id</code></td><td>Pipeline default store when no path/env match exists.</td><td><code>ST1008</code></td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Feature Flags</h3>
+                        <p>The current app does not ship a feature flag service. Operational toggles are environment variables. For rollout flags, add a typed config layer and document the default, owner, rollout plan, and removal date.</p>
+
+                        <h3>Integrations</h3>
+                        <table>
+                            <thead><tr><th>Integration</th><th>Status</th><th>Configuration</th></tr></thead>
+                            <tbody>
+                                <tr><td>POS CSV</td><td>Implemented.</td><td>Place matching CSV files in project root, call <code>/api/load-pos</code>.</td></tr>
+                                <tr><td>OpenTelemetry</td><td>Recommended, not implemented.</td><td>Add FastAPI instrumentation and exporter in production.</td></tr>
+                                <tr><td>Prometheus/Datadog</td><td>Recommended, not implemented.</td><td>Add middleware or sidecar based on deployment stack.</td></tr>
+                                <tr><td>Authentication provider</td><td>Required for public production, not implemented.</td><td>JWT/OAuth/OIDC or network-gated private deployment.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="api" class="doc-section searchable">
+                        <h2>API Reference</h2>
+                        <p>Base URL for local development is <code>http://localhost:8000</code>. Interactive OpenAPI documentation is available at <code>/docs</code>.</p>
+                        <div class="callout warning">
+                            <p><strong>Authentication:</strong> Read endpoints are public by default. Write/admin endpoints are protected when <code>API_KEY</code> is configured. Send the key as <code>X-API-Key</code> or <code>Authorization: Bearer &lt;key&gt;</code>. For public enterprise deployments, pair this with HTTPS, private networking, or an identity-aware proxy.</p>
+                        </div>
+
+                        <h3>Endpoint Summary</h3>
+                        <table>
+                            <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th><th>Auth</th><th>Rate Limit</th></tr></thead>
+                            <tbody>
+                                <tr><td>GET</td><td><code>/health</code></td><td>Database and per-store stale feed health.</td><td>None</td><td>Bypassed by middleware.</td></tr>
+                                <tr><td>GET</td><td><code>/ready</code></td><td>Readiness probe, same logic as health.</td><td>None</td><td>Bypassed.</td></tr>
+                                <tr><td>GET</td><td><code>/live</code></td><td>Liveness probe.</td><td>None</td><td>Bypassed.</td></tr>
+                                <tr><td>GET</td><td><code>/</code></td><td>SEO-focused landing page with Dashboard, Guide, Swagger, and Keshab Kumar profile links.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>POST</td><td><code>/events/ingest</code></td><td>Bulk ingest visitor events.</td><td>Optional API key when <code>API_KEY</code> is set.</td><td>Subject to in-memory limiter if enabled.</td></tr>
+                                <tr><td>GET</td><td><code>/metrics</code></td><td>Global alias for <code>ST1008</code> metrics.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/stores/{store_id}/metrics</code></td><td>Store KPI summary.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/stores/{store_id}/funnel</code></td><td>Funnel counts and dropoff percentages.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/stores/{store_id}/heatmap</code></td><td>Zone heatmap data.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/stores/{store_id}/cameras</code></td><td>Camera metadata and processing stats.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/stores/{store_id}/anomalies</code></td><td>Operational anomaly cards.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/stores/{store_id}/recent-events</code></td><td>Recent events for feed display.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/stores/{store_id}/system-stats</code></td><td>Database size, counts, latency, coverage metadata, environment.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>POST</td><td><code>/api/load-pos</code></td><td>Load POS CSV files from project root.</td><td>Optional API key when <code>API_KEY</code> is set.</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/api/videos</code></td><td>List available MP4 videos.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/api/video_stream/{video_name}</code></td><td>Stream raw MP4 video with range support.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/api/annotated_exists/{video_name}</code></td><td>Check whether annotated video exists.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/api/annotated_stream/{video_name}</code></td><td>Stream annotated MP4 video.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>POST</td><td><code>/api/simulate</code></td><td>Run detection pipeline in background.</td><td>Optional API key when <code>API_KEY</code> is set.</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/api/simulation_status</code></td><td>Read pipeline progress JSON.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/api/project-profile</code></td><td>Machine-readable project profile, public URL, author handle, and official links.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/robots.txt</code></td><td>Search crawler instructions with sitemap location.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/sitemap.xml</code></td><td>XML sitemap generated from <code>APP_PUBLIC_BASE_URL</code>.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/site.webmanifest</code></td><td>PWA/web app manifest metadata.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/dashboard</code></td><td>Serve dashboard HTML.</td><td>None</td><td>Configurable.</td></tr>
+                                <tr><td>GET</td><td><code>/guide</code></td><td>Serve this documentation page.</td><td>None</td><td>Configurable.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Event Ingest</h3>
+                        <p><strong>URL:</strong> <code>POST /events/ingest</code></p>
+                        <p><strong>Purpose:</strong> Store structured visitor events. The endpoint returns HTTP <code>207 Multi-Status</code> because individual records can succeed or fail within one batch.</p>
+                        <p><strong>Request example:</strong></p>
+                        <pre><code class="language-bash">curl -X POST http://localhost:8000/events/ingest \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "event_id": "4c2bde79-ff5f-4e8a-9c42-bfd4f0bfe5a8",
+      "store_id": "ST1008",
+      "camera_id": "cam1",
+      "visitor_id": "VIS_001",
+      "event_type": "ENTRY",
+      "timestamp": "2026-06-09T10:00:00Z",
+      "zone_id": "ENTRY",
+      "dwell_ms": 0,
+      "is_staff": false,
+      "confidence": 0.93,
+      "metadata": {
+        "queue_depth": null,
+        "sku_zone": null,
+        "session_seq": 1
+      }
+    }
+  ]'</code></pre>
+                        <p><strong>Response example:</strong></p>
+                        <pre><code class="language-json">{
+  "ingested": 1,
+  "failed": 0,
+  "errors": []
+}</code></pre>
+                        <p><strong>Error responses:</strong></p>
+                        <table>
+                            <thead><tr><th>Status</th><th>When</th><th>Example Detail</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>413</code></td><td>Batch exceeds hard or configured maximum.</td><td><code>Batch too large. Max supported events per request is 500.</code></td></tr>
+                                <tr><td><code>207</code></td><td>Some records fail schema validation or monotonicity.</td><td>Errors array contains per-event failures.</td></tr>
+                                <tr><td><code>429</code></td><td>Rate limiter enabled and caller exceeds limit.</td><td><code>Rate limit exceeded</code> plus <code>Retry-After</code>.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Event Schema</h3>
+                        <table>
+                            <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Rules</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>event_id</code></td><td>UUID</td><td>Yes</td><td>Primary idempotency key.</td></tr>
+                                <tr><td><code>store_id</code></td><td>String</td><td>Yes</td><td>Non-empty.</td></tr>
+                                <tr><td><code>camera_id</code></td><td>String</td><td>Yes</td><td>Non-empty.</td></tr>
+                                <tr><td><code>visitor_id</code></td><td>String</td><td>Yes</td><td>Non-empty tracker or Re-ID token.</td></tr>
+                                <tr><td><code>event_type</code></td><td>Enum</td><td>Yes</td><td>Accepts uppercase scoring schema and native snake_case aliases.</td></tr>
+                                <tr><td><code>timestamp</code></td><td>UTC ISO-8601</td><td>Yes</td><td>Strict format like <code>YYYY-MM-DDTHH:MM:SSZ</code>.</td></tr>
+                                <tr><td><code>zone_id</code></td><td>String/null</td><td>No</td><td>Zone identifier such as <code>BILLING</code>.</td></tr>
+                                <tr><td><code>dwell_ms</code></td><td>Integer</td><td>No</td><td>Must be at least 0. Default is 0.</td></tr>
+                                <tr><td><code>is_staff</code></td><td>Boolean</td><td>No</td><td>Default false. Staff are excluded from customer KPIs.</td></tr>
+                                <tr><td><code>confidence</code></td><td>Float</td><td>Yes</td><td>0.0 to 1.0.</td></tr>
+                                <tr><td><code>metadata.queue_depth</code></td><td>Integer/null</td><td>No</td><td>Must be at least 0 when present.</td></tr>
+                                <tr><td><code>metadata.sku_zone</code></td><td>String/null</td><td>No</td><td>Optional product/category context.</td></tr>
+                                <tr><td><code>metadata.session_seq</code></td><td>Integer</td><td>No</td><td>Must be monotonic per visitor. Default is 0.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Store Metrics</h3>
+                        <p><strong>URL:</strong> <code>GET /stores/{store_id}/metrics?camera_id=CAM1</code></p>
+                        <pre><code class="language-json">{
+  "store_id": "ST1008",
+  "camera_id": null,
+  "unique_visitors": 12,
+  "conversion_rate": 25.0,
+  "average_dwell_minutes": 6.42,
+  "average_dwell_per_zone": {
+    "BILLING": 82.0
+  },
+  "current_queue_depth": 3,
+  "abandonment_rate": 20.0
+}</code></pre>
+
+                        <h3>Simulation</h3>
+                        <p><strong>URL:</strong> <code>POST /api/simulate</code></p>
+                        <pre><code class="language-json">{
+  "video": "Store 1/CAM 3 - entry.mp4",
+  "force": false
+}</code></pre>
+                        <p><strong>Response examples:</strong> <code>{"status":"Simulation started in background.","video":"..."}</code> or <code>{"status":"already_processed", ...}</code>.</p>
+
+                        <h3>Video Endpoints</h3>
+                        <p>Use <code>GET /api/videos</code> to discover videos. Use stream endpoints for dashboard playback. They support <code>Range</code> headers and return <code>206 Partial Content</code> where applicable.</p>
+                    </section>
+
+                    <section id="architecture" class="doc-section searchable">
+                        <h2>Architecture</h2>
+                        <h3>System Overview</h3>
+                        <pre class="mermaid">graph TD
+    subgraph Edge_or_Local_Machine
+        V[MP4 or CCTV feed]
+        P[pipeline/detect.py]
+        M[YOLO11n tracking]
+        Z[Zone mapping and event emitter]
+    end
+    subgraph API_Service
+        A[FastAPI app/main.py]
+        R[Rate limiting and structured logs]
+        S[Analytics modules]
+        H[Dashboard and guide HTML]
+    end
+    subgraph Persistence
+        D[(SQLite store_intelligence.db)]
+        POS[(POS transactions)]
+    end
+    V --> P --> M --> Z
+    Z -->|POST /events/ingest| A
+    A --> R
+    A --> D
+    A --> S
+    POS --> D
+    S --> H</pre>
+
+                        <h3>Data Flow</h3>
+                        <pre class="mermaid">sequenceDiagram
+    participant U as User
+    participant UI as Dashboard
+    participant API as FastAPI
+    participant CV as Detection Pipeline
+    participant DB as SQLite
+    U->>UI: Open /dashboard
+    UI->>API: GET /api/videos
+    U->>UI: Start simulation
+    UI->>API: POST /api/simulate
+    API-->>CV: Background process video
+    CV->>API: POST /events/ingest
+    API->>DB: Validate and insert events
+    UI->>API: GET metrics/funnel/heatmap/anomalies
+    API->>DB: Query events and POS
+    API-->>UI: JSON analytics
+    UI-->>U: KPIs, charts, video, anomalies</pre>
+
+                        <h3>Components and Responsibilities</h3>
+                        <table>
+                            <thead><tr><th>Component</th><th>Responsibility</th><th>Failure Mode</th><th>Recovery</th></tr></thead>
+                            <tbody>
+                                <tr><td>Pipeline</td><td>Object detection, tracking, zone mapping, event emission.</td><td>Model load failure, missing video, ingest target unavailable.</td><td>Check console output, video path, dependencies, and <code>INGEST_URL</code>.</td></tr>
+                                <tr><td>FastAPI</td><td>Routes, validation, CORS, rate limits, logging, HTML serving.</td><td>Startup failure, DB unavailable, route exception.</td><td>Check <code>/health</code>, container logs, environment variables.</td></tr>
+                                <tr><td>SQLite</td><td>Stores events and POS rows.</td><td>Locked file, reset on startup, corrupt local file.</td><td>Use WAL-ready settings as needed, preserve backups, set <code>RESET_DB_ON_STARTUP=0</code>.</td></tr>
+                                <tr><td>Dashboard</td><td>Visualizes analytics and starts simulations.</td><td>Fetch failures, empty state, stale data.</td><td>Open browser console, inspect API responses, verify events exist.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Infrastructure</h3>
+                        <p>The default infrastructure is a single Dockerized FastAPI service exposing HTTP. It mounts the repository into <code>/workspace</code>, uses SQLite by default, and can process local video files. For multi-store production, migrate persistence to a managed database, place the service behind HTTPS and auth, and move CV processing to controlled edge workers or job runners.</p>
+                    </section>
+
+                    <section id="database" class="doc-section searchable">
+                        <h2>Database Documentation</h2>
+                        <p>The application uses SQLAlchemy models backed by SQLite by default.</p>
+                        <pre class="mermaid">erDiagram
+    events {
+        string event_id PK
+        string store_id
+        string camera_id
+        string visitor_id
+        string event_type
+        string timestamp
+        string zone_id
+        int dwell_ms
+        bool is_staff
+        float confidence
+        json metadata_json
+        string gender_pred
+        int age_pred
+        string age_bucket
+        bool is_face_hidden
+        string group_id
+        int group_size
+        float zone_hotspot_x
+        float zone_hotspot_y
+    }
+    pos_transactions {
+        int id PK
+        string order_id
+        string store_id
+        string timestamp
+        string brand_name
+        float total_amount
+        string product_id
+        string order_date
+        string order_time
+    }</pre>
+
+                        <h3>Entities</h3>
+                        <table>
+                            <thead><tr><th>Entity</th><th>Owner</th><th>Description</th><th>Retention Notes</th></tr></thead>
+                            <tbody>
+                                <tr><td><code>events</code></td><td>CV/API pipeline.</td><td>Visitor behavior events, zone state, queue metadata, optional native enrichment fields.</td><td>Define retention before production because behavioral data is privacy-sensitive.</td></tr>
+                                <tr><td><code>pos_transactions</code></td><td>POS ingestion process.</td><td>Order timestamp and amount data used for conversion matching.</td><td>Protect as business-sensitive sales data.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Relationships</h3>
+                        <p>There is no enforced foreign key between <code>events</code> and <code>pos_transactions</code>. Analytics join them logically by <code>store_id</code> and time windows. Events are grouped by <code>visitor_id</code> for session-level metrics.</p>
+                    </section>
+
+                    <section id="security" class="doc-section searchable">
+                        <h2>Security</h2>
+                        <h3>Current Controls</h3>
+                        <table>
+                            <thead><tr><th>Area</th><th>Implemented Control</th><th>Production Recommendation</th></tr></thead>
+                            <tbody>
+                                <tr><td>Input validation</td><td>Pydantic event schema validates fields, timestamps, confidence range, and metadata constraints.</td><td>Keep validation at API boundary and reject unknown producers.</td></tr>
+                                <tr><td>Idempotency</td><td><code>event_id</code> primary key prevents duplicate rows.</td><td>Monitor duplicate rates by producer.</td></tr>
+                                <tr><td>Write endpoint authentication</td><td>When <code>API_KEY</code> is set, <code>/events/ingest</code>, <code>/api/load-pos</code>, and <code>/api/simulate</code> require <code>X-API-Key</code> or bearer auth.</td><td>Store the key in deployment secrets and rotate it periodically.</td></tr>
+                                <tr><td>Security headers</td><td>Responses include CSP, <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, referrer policy, and permissions policy.</td><td>Keep CSP updated if new CDNs or frontend assets are added.</td></tr>
+                                <tr><td>Request size guard</td><td><code>MAX_REQUEST_BODY_BYTES</code> rejects oversized bodies before route processing.</td><td>Tune for real ingest batch sizes and monitor <code>413</code> responses.</td></tr>
+                                <tr><td>Host header validation</td><td><code>ALLOWED_HOSTS</code> optionally rejects unexpected Host headers.</td><td>Set it to your Hugging Face Space/custom domain plus localhost for local checks.</td></tr>
+                                <tr><td>Rate limiting</td><td>Optional in-memory per-IP limiter with <code>Retry-After</code>.</td><td>Use shared Redis or edge gateway for multi-instance deployments.</td></tr>
+                                <tr><td>CORS</td><td>Configurable <code>ALLOWED_ORIGINS</code>.</td><td>Use exact origins, not <code>*</code>, for production browsers.</td></tr>
+                                <tr><td>Path traversal</td><td>Video stream endpoints use basename stripping and base-directory boundary checks.</td><td>Keep video files in controlled directories.</td></tr>
+                                <tr><td>SQL injection</td><td>SQLAlchemy ORM and parameterized text for health checks.</td><td>Continue avoiding string-built SQL.</td></tr>
+                                <tr><td>Static analysis</td><td>Repository documents CodeQL, Dependabot, and gitleaks.</td><td>Enforce checks before merge.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Authentication and Authorization</h3>
+                        <p>The app now supports lightweight API-key protection for write/admin endpoints. It is intentionally optional so demos and tests remain simple. For public or enterprise deployments, use <code>API_KEY</code> at minimum and add one of the following before exposing the app broadly:</p>
+                        <ul>
+                            <li>Private network only, with VPN or zero-trust access.</li>
+                            <li>Reverse proxy authentication in front of FastAPI.</li>
+                            <li>JWT/OAuth/OIDC middleware with role checks for write endpoints.</li>
+                            <li>IP allowlists for CV pipeline producers.</li>
+                        </ul>
+
+                        <h3>Data Protection</h3>
+                        <p>Events are PII-adjacent because they describe behavior, movement, and possible demographic estimates. Use least-privilege database credentials, encrypted disks, short retention windows, anonymized visitor IDs, and clear policies for footage storage.</p>
+
+                        <h3>Session Management</h3>
+                        <p>The current app does not manage user login sessions. Visitor sessions are analytical sessions represented by <code>visitor_id</code> and <code>metadata.session_seq</code>.</p>
+                    </section>
+
+                    <section id="deployment" class="doc-section searchable">
+                        <h2>Deployment Guide</h2>
+                        <h3>Local Deployment</h3>
+                        <pre><code class="language-bash">pip install -r requirements-dev.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+curl http://localhost:8000/health</code></pre>
+
+                        <h3>Docker Deployment</h3>
+                        <pre><code class="language-bash">docker build -f api.Dockerfile -t store-intelligence .
+docker compose up api
+curl http://localhost:8000/ready</code></pre>
+
+                        <h3>Cloud Deployment</h3>
+                        <p>The Dockerfile listens on <code>${PORT}</code> and defaults to <code>8080</code>, which fits platforms that inject <code>PORT</code>. For a cloud service, set environment variables explicitly, attach durable storage or a managed database, and put the service behind HTTPS.</p>
+                        <p>For Hugging Face Spaces, configure <code>APP_PUBLIC_BASE_URL</code> to the public Space URL, keep secrets in Space secrets, and set <code>API_KEY</code> before exposing write endpoints publicly. If using the previous deployment URL, the canonical URL should point to the active production Space or custom domain.</p>
+
+                        <h3>Production Deployment Checklist</h3>
+                        <table>
+                            <thead><tr><th>Step</th><th>Command or Action</th><th>Validation</th></tr></thead>
+                            <tbody>
+                                <tr><td>Build immutable image</td><td><code>docker build -f api.Dockerfile -t store-intelligence:&lt;version&gt; .</code></td><td>Image builds without dependency errors.</td></tr>
+                                <tr><td>Configure env</td><td>Set <code>DATABASE_URL</code>, <code>ALLOWED_ORIGINS</code>, <code>ALLOWED_HOSTS</code>, <code>APP_PUBLIC_BASE_URL</code>, <code>API_KEY</code>, rate limits, <code>MAX_REQUEST_BODY_BYTES</code>, and <code>RESET_DB_ON_STARTUP=0</code>.</td><td><code>/stores/{id}/system-stats</code> shows expected <code>ENV</code>; <code>/sitemap.xml</code> uses the public URL.</td></tr>
+                                <tr><td>Add security boundary</td><td>Use <code>API_KEY</code>, auth proxy, private network, or API gateway.</td><td>Unauthenticated write calls to <code>/events/ingest</code> return <code>401</code>.</td></tr>
+                                <tr><td>Run smoke tests</td><td>Call probes, ingest a test event, fetch metrics.</td><td>Health is healthy; event count increments.</td></tr>
+                                <tr><td>Validate SEO</td><td>Open <code>/</code>, <code>/guide</code>, <code>/robots.txt</code>, <code>/sitemap.xml</code>, and <code>/api/project-profile</code>.</td><td>Keshab Kumar, <code>@keshabkjha</code>, Linktree, LinkedIn, GitHub, LeetCode, Codeforces, Kaggle, Codolio, and WakaTime links are present.</td></tr>
+                                <tr><td>Start pipeline worker</td><td>Run <code>pipeline/detect.py</code> with correct <code>INGEST_URL</code>.</td><td>Events appear in recent-events feed.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Rollback Steps</h3>
+                        <ol>
+                            <li>Stop new pipeline jobs or point them to the previous API URL.</li>
+                            <li>Redeploy the last known good container image.</li>
+                            <li>Restore the previous database snapshot if schema or data changes caused corruption.</li>
+                            <li>Validate <code>/health</code>, <code>/ready</code>, dashboard load, and one metrics endpoint.</li>
+                            <li>Resume pipeline jobs after confirming event ingest works.</li>
+                        </ol>
+                    </section>
+
+                    <section id="observability" class="doc-section searchable">
+                        <h2>Monitoring and Observability</h2>
+                        <h3>Logging</h3>
+                        <p>Each HTTP request writes a JSON record to stdout with:</p>
+                        <pre><code class="language-json">{
+  "trace_id": "uuid",
+  "store_id": "ST1008",
+  "endpoint": "/stores/ST1008/metrics",
+  "latency_ms": 42,
+  "event_count": 0,
+  "status_code": 200
+}</code></pre>
+
+                        <h3>Metrics to Track</h3>
+                        <table>
+                            <thead><tr><th>Metric</th><th>Source</th><th>Alert When</th></tr></thead>
+                            <tbody>
+                                <tr><td>API latency</td><td>Structured logs or APM.</td><td>p95 exceeds your SLA.</td></tr>
+                                <tr><td>Ingest failures</td><td><code>/events/ingest</code> response and logs.</td><td>Failed count rises above normal baseline.</td></tr>
+                                <tr><td>Stale feed</td><td><code>/health</code>.</td><td>Store feed is stale for more than expected processing delay.</td></tr>
+                                <tr><td>Database size</td><td><code>/stores/{store_id}/system-stats</code>.</td><td>Growth exceeds retention expectations.</td></tr>
+                                <tr><td>Queue depth anomalies</td><td><code>/stores/{store_id}/anomalies</code>.</td><td>Severity is <code>WARN</code> or <code>CRITICAL</code>.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Dashboards and Alerts</h3>
+                        <p>No vendor-specific dashboard is bundled. Recommended production setup: collect stdout logs, export FastAPI metrics, add uptime checks for <code>/live</code> and <code>/ready</code>, and route critical anomalies to store support channels.</p>
+                    </section>
+
+                    <section id="troubleshooting" class="doc-section searchable">
+                        <h2>Troubleshooting</h2>
+                        <table>
+                            <thead><tr><th>Problem</th><th>Possible Causes</th><th>Resolution Steps</th><th>Verification</th></tr></thead>
+                            <tbody>
+                                <tr><td>Dashboard loads but all values are zero.</td><td>No events ingested, database reset on startup, wrong store selected.</td><td>Run a video simulation, call <code>/stores/ST1008/recent-events</code>, set <code>RESET_DB_ON_STARTUP=0</code> if persistence is needed.</td><td>Recent events endpoint returns rows.</td></tr>
+                                <tr><td><code>/events/ingest</code> returns failed records.</td><td>Invalid UUID, non-UTC timestamp, confidence out of range, non-monotonic session sequence.</td><td>Validate payload against schema, use strict <code>Z</code> timestamp, increment <code>session_seq</code>.</td><td>Response has <code>"failed": 0</code>.</td></tr>
+                                <tr><td>HTTP <code>401</code> on ingest, POS load, or simulation.</td><td><code>API_KEY</code> is configured but the request did not include the correct key.</td><td>Send <code>X-API-Key: &lt;key&gt;</code> or <code>Authorization: Bearer &lt;key&gt;</code>. Store the key in deployment secrets.</td><td>Write endpoint returns its normal success response.</td></tr>
+                                <tr><td>HTTP <code>413</code> on ingest.</td><td>Batch larger than <code>MAX_INGEST_BATCH</code> or hard 500 check.</td><td>Split payload into smaller batches or adjust env below operational limits.</td><td>Request returns <code>207</code> with ingested count.</td></tr>
+                                <tr><td>HTTP <code>413</code> before route handling.</td><td>Request body exceeds <code>MAX_REQUEST_BODY_BYTES</code>.</td><td>Reduce payload size or raise the byte limit after validating expected traffic.</td><td>Smaller request reaches the endpoint and returns route-level status.</td></tr>
+                                <tr><td>HTTP <code>400</code> with host error.</td><td><code>ALLOWED_HOSTS</code> is configured and the request Host header is not allowed.</td><td>Add the public domain, Hugging Face Space host, or localhost to <code>ALLOWED_HOSTS</code>.</td><td>Health and dashboard requests succeed from the intended domain.</td></tr>
+                                <tr><td>HTTP <code>429</code>.</td><td>Rate limiter enabled and client exceeded limit.</td><td>Respect <code>Retry-After</code>, raise limit, or add proper producer allowlisting.</td><td>Calls succeed after retry window.</td></tr>
+                                <tr><td>Video stream returns <code>404</code>.</td><td>File not in allowed video directories, typo, duplicate basename ambiguity, no annotated output.</td><td>Call <code>/api/videos</code>, confirm filename, check allowed folders <code>Store 1</code>, <code>Store 2</code>, <code>CCTV Footage</code>.</td><td>Stream endpoint returns video or <code>206</code> for range request.</td></tr>
+                                <tr><td>Simulation starts but no new data appears.</td><td>Clip already processed and cache reused, pipeline failed in background, wrong ingest URL.</td><td>Use <code>force: true</code>, inspect server logs, run <code>python3 pipeline/detect.py</code> manually, verify <code>INGEST_URL</code>.</td><td>Event count increases.</td></tr>
+                                <tr><td>Conversion rate is always zero.</td><td>No POS CSV loaded, timestamps do not align with billing visits, no billing events.</td><td>Call <code>/api/load-pos</code>, inspect POS file columns, process billing clip.</td><td><code>pos_transactions_count</code> increases and purchase funnel stage is non-zero.</td></tr>
+                                <tr><td>Heatmap says low confidence.</td><td>Fewer than 20 unique sessions for selected store/camera.</td><td>Ingest more events or widen filter to all cameras.</td><td><code>data_confidence</code> becomes true.</td></tr>
+                                <tr><td>Database disappears between runs.</td><td><code>RESET_DB_ON_STARTUP</code> defaults to <code>1</code> for default SQLite.</td><td>Set <code>RESET_DB_ON_STARTUP=0</code> when you want persistence.</td><td>Event count remains after restart.</td></tr>
+                                <tr><td>Docker container listens on unexpected port.</td><td>Dockerfile default <code>PORT=8080</code>, compose maps <code>8000</code>.</td><td>Use compose for local <code>8000</code> or set <code>PORT</code> explicitly.</td><td><code>curl</code> succeeds on expected host port.</td></tr>
+                                <tr><td>Sitemap or canonical URL points to localhost in production.</td><td><code>APP_PUBLIC_BASE_URL</code> was not set.</td><td>Set it to the active Hugging Face Space or custom domain without a trailing slash.</td><td><code>/sitemap.xml</code> contains the production URL.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="faq" class="doc-section searchable">
+                        <h2>FAQ</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="screen-card"><h4>1. What does the app do?</h4><p>It converts CCTV or MP4 footage into retail events and dashboard KPIs.</p></div>
+                            <div class="screen-card"><h4>2. Where do I start?</h4><p>Run Docker Compose, open <code>/dashboard</code>, and process a sample video.</p></div>
+                            <div class="screen-card"><h4>3. Is there a login?</h4><p>There is no user login yet. Production write endpoints can be protected with <code>API_KEY</code>; use trusted networks or an auth proxy for full user authentication.</p></div>
+                            <div class="screen-card"><h4>4. Where is Swagger?</h4><p>Open <code>/docs</code>.</p></div>
+                            <div class="screen-card"><h4>5. Where is this guide served?</h4><p>Open <code>/guide</code>.</p></div>
+                            <div class="screen-card"><h4>6. What stores are configured?</h4><p><code>ST1008</code> Brigade Road Bangalore and <code>ST1076</code> Purplle MUM 1076.</p></div>
+                            <div class="screen-card"><h4>7. How are staff excluded?</h4><p>Metrics filter events where <code>is_staff</code> is false.</p></div>
+                            <div class="screen-card"><h4>8. Why is conversion zero?</h4><p>POS data or billing events may be missing, or timestamps may not match within the five-minute window.</p></div>
+                            <div class="screen-card"><h4>9. Can I ingest duplicate events?</h4><p>Yes. Duplicate <code>event_id</code> values are treated as successful idempotent inserts.</p></div>
+                            <div class="screen-card"><h4>10. What timestamp format is required?</h4><p>Use strict UTC ISO format such as <code>2026-06-09T10:00:00Z</code>.</p></div>
+                            <div class="screen-card"><h4>11. Can I run without Docker?</h4><p>Yes, install Python dependencies and run Uvicorn locally.</p></div>
+                            <div class="screen-card"><h4>12. Why does data reset?</h4><p><code>RESET_DB_ON_STARTUP</code> defaults to <code>1</code> for local stateless runs.</p></div>
+                            <div class="screen-card"><h4>13. How do I preserve data?</h4><p>Set <code>RESET_DB_ON_STARTUP=0</code> and back up the SQLite file.</p></div>
+                            <div class="screen-card"><h4>14. What is the maximum ingest batch?</h4><p>Default and hard limit are 500 events unless configured lower.</p></div>
+                            <div class="screen-card"><h4>15. What is rate limiting?</h4><p>An optional in-memory per-IP limiter controlled by <code>RATE_LIMIT_PER_MINUTE</code>.</p></div>
+                            <div class="screen-card"><h4>16. Does the dashboard use WebSockets?</h4><p>No. It polls REST endpoints.</p></div>
+                            <div class="screen-card"><h4>17. How are videos streamed?</h4><p>Through FastAPI file responses with HTTP range support.</p></div>
+                            <div class="screen-card"><h4>18. How do annotated videos appear?</h4><p>The app checks for files prefixed with <code>annotated_</code>.</p></div>
+                            <div class="screen-card"><h4>19. What is a dead zone?</h4><p>A retail zone with no recent customer visits while the store has traffic.</p></div>
+                            <div class="screen-card"><h4>20. What is queue spike severity?</h4><p>It depends on rolling queue history or fallback thresholds.</p></div>
+                            <div class="screen-card"><h4>21. Can I add a new store?</h4><p>Yes. Add a store entry, cameras, roles, folders, floor plan, and zones to <code>store_layout.json</code>.</p></div>
+                            <div class="screen-card"><h4>22. Can I add a new event type?</h4><p>Yes, but update <code>app/models.py</code>, analytics logic, tests, and docs.</p></div>
+                            <div class="screen-card"><h4>23. What database is used?</h4><p>SQLite by default through SQLAlchemy.</p></div>
+                            <div class="screen-card"><h4>24. Is PostgreSQL supported?</h4><p>SQLAlchemy can point to another database URL, but the project is currently documented and tested around SQLite.</p></div>
+                            <div class="screen-card"><h4>25. How do I run tests?</h4><p>Use <code>python3 -m pytest tests/ -v</code> or <code>./run-tests.sh</code>.</p></div>
+                            <div class="screen-card"><h4>26. What quality tools are used?</h4><p>Ruff, mypy, pytest, pytest-cov, and pre-commit are configured.</p></div>
+                            <div class="screen-card"><h4>27. Where are logs?</h4><p>Structured JSON logs are written to stdout.</p></div>
+                            <div class="screen-card"><h4>28. How do I report security issues?</h4><p>Use the process in <code>SECURITY.md</code>; do not open public issues for vulnerabilities.</p></div>
+                            <div class="screen-card"><h4>29. How often is support reviewed?</h4><p><code>SUPPORT.md</code> states issues are reviewed weekly on a best-effort basis.</p></div>
+                            <div class="screen-card"><h4>30. What is planned next?</h4><p>Roadmap includes PostgreSQL multi-tenancy, Redis pub/sub, improved calibration, and alerting.</p></div>
+                            <div class="screen-card"><h4>31. How is SEO handled?</h4><p>The app serves <code>/</code>, <code>/robots.txt</code>, <code>/sitemap.xml</code>, <code>/site.webmanifest</code>, and author metadata for Keshab Kumar <code>@keshabkjha</code>.</p></div>
+                            <div class="screen-card"><h4>32. Where are official creator links exposed?</h4><p>They are visible on the landing page and guide, and machine-readable from <code>/api/project-profile</code>.</p></div>
+                        </div>
+                    </section>
+
+                    <section id="best-practices" class="doc-section searchable">
+                        <h2>Best Practices</h2>
+                        <table>
+                            <thead><tr><th>Category</th><th>Recommendation</th></tr></thead>
+                            <tbody>
+                                <tr><td>Workflow</td><td>Process entry cameras before zone or billing cameras when measuring store-level funnel.</td></tr>
+                                <tr><td>Data quality</td><td>Keep store layouts, camera roles, and POS timestamps aligned before interpreting conversion.</td></tr>
+                                <tr><td>Security</td><td>Add authentication, private networking, explicit CORS, and rate limits before public deployment.</td></tr>
+                                <tr><td>Performance</td><td>Batch event ingestion and avoid one HTTP call per frame.</td></tr>
+                                <tr><td>Operations</td><td>Use health probes, structured log aggregation, database backups, and rollback-ready images.</td></tr>
+                                <tr><td>Maintenance</td><td>Update tests and documentation in the same PR as API or schema changes.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="release-notes" class="doc-section searchable">
+                        <h2>Release Notes</h2>
+                        <h3>Unreleased</h3>
+                        <table>
+                            <thead><tr><th>Type</th><th>Change</th></tr></thead>
+                            <tbody>
+                                <tr><td>Added</td><td>CI workflows for linting, typing, testing, and Docker builds.</td></tr>
+                                <tr><td>Added</td><td>Security automation with CodeQL, Dependabot, gitleaks, and threat model documentation.</td></tr>
+                                <tr><td>Added</td><td>Pre-commit tooling and operational documentation.</td></tr>
+                                <tr><td>Changed</td><td>Consolidated dependency management with lockfiles.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="roadmap" class="doc-section searchable">
+                        <h2>Roadmap</h2>
+                        <h3>Current Capabilities</h3>
+                        <ul>
+                            <li>Real-time CCTV ingestion and behavioral spatial mapping.</li>
+                            <li>Hybrid Re-ID signals and staff exclusion.</li>
+                            <li>Live dashboard with heatmaps, funnel, events, video, and anomalies.</li>
+                            <li>Docker-based local operation and testing.</li>
+                        </ul>
+                        <h3>Planned Enhancements</h3>
+                        <table>
+                            <thead><tr><th>Timeframe</th><th>Planned Work</th><th>Why It Matters</th></tr></thead>
+                            <tbody>
+                                <tr><td>Q3 2026</td><td>PostgreSQL multi-tenancy for 40+ stores.</td><td>Supports centralized multi-store deployments.</td></tr>
+                                <tr><td>Q3 2026</td><td>Redis pub/sub for dashboard streaming.</td><td>Reduces polling and improves real-time UX.</td></tr>
+                                <tr><td>Q3 2026</td><td>Investigate newer YOLO models on edge GPUs.</td><td>Improves accuracy/performance where hardware allows.</td></tr>
+                                <tr><td>Q3 2026</td><td>Automated calibration.</td><td>Reduces manual four-point setup effort.</td></tr>
+                                <tr><td>Q4 2026</td><td>Opt-in aggregated demographic analysis.</td><td>Adds customer insight while requiring careful privacy controls.</td></tr>
+                                <tr><td>Q4 2026</td><td>Actionable mobile alerting.</td><td>Turns anomalies into real-time store interventions.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+                    <section id="developer-docs" class="doc-section searchable">
+                        <h2>Developer Documentation</h2>
+                        <h3>Project Structure</h3>
+                        <pre><code class="language-text">app/                  FastAPI app, analytics modules, HTML dashboard and guide
+pipeline/             CV detection, calibration, adaptive model artifacts
+config/               Store, camera, role, and zone configuration
+tests/                Pytest suite
+scripts/              Labeling and supervised model training helpers
+docs/                 Operations and threat model docs
+api.Dockerfile        Runtime image
+docker-compose.yml    Local API service orchestration</code></pre>
+
+                        <h3>Local Development</h3>
+                        <pre><code class="language-bash">python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements-dev.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000</code></pre>
+
+                        <h3>Coding Standards</h3>
+                        <table>
+                            <thead><tr><th>Area</th><th>Standard</th></tr></thead>
+                            <tbody>
+                                <tr><td>Python version</td><td>3.11 target.</td></tr>
+                                <tr><td>Formatting/linting</td><td>Ruff, line length 100, import sorting.</td></tr>
+                                <tr><td>Typing</td><td>mypy configured for <code>app</code>, <code>pipeline</code>, and <code>tests</code>.</td></tr>
+                                <tr><td>Tests</td><td>pytest with coverage threshold configured at 55 percent.</td></tr>
+                                <tr><td>Commits</td><td>Conventional Commits such as <code>feat:</code>, <code>fix:</code>, <code>docs:</code>, <code>test:</code>.</td></tr>
+                            </tbody>
+                        </table>
+
+                        <h3>Testing</h3>
+                        <pre><code class="language-bash">ruff check .
+ruff format .
+mypy
+python3 -m pytest tests/ -v</code></pre>
+
+                        <h3>CI/CD and Pull Requests</h3>
+                        <p>Before a PR, run tests, include new tests for feature changes, update API/event documentation when contracts change, and keep unrelated changes out of the diff. Dependency updates should modify <code>requirements.in</code> or <code>requirements-dev.in</code> and regenerate lockfiles with <code>pip-compile</code>.</p>
+                    </section>
+
+                    <section id="glossary" class="doc-section searchable">
+                        <h2>Glossary</h2>
+                        <table>
+                            <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+                            <tbody>
+                                <tr><td>Annotated video</td><td>A processed MP4, usually prefixed with <code>annotated_</code>, that includes visual overlays.</td></tr>
+                                <tr><td>Billing queue</td><td>The checkout area where shoppers wait before purchase.</td></tr>
+                                <tr><td>ByteTrack</td><td>A tracking method used with object detection to keep person identities stable across frames.</td></tr>
+                                <tr><td>Camera role</td><td>Configured purpose of a camera: entry, zone, or billing.</td></tr>
+                                <tr><td>Conversion rate</td><td>Percentage of store visitors matched to POS purchases.</td></tr>
+                                <tr><td>Dead zone</td><td>A retail zone with no recent customer visits while the store has traffic.</td></tr>
+                                <tr><td>Dwell time</td><td>How long a visitor stays in a store or zone.</td></tr>
+                                <tr><td>Event</td><td>A structured JSON record describing visitor movement or queue state.</td></tr>
+                                <tr><td>Heatmap intensity</td><td>Relative zone popularity scaled from 0 to 100.</td></tr>
+                                <tr><td>Homography</td><td>A transform that maps camera image coordinates to floor-plan coordinates.</td></tr>
+                                <tr><td>Idempotency</td><td>Safe repeat behavior where the same event ID does not create duplicate rows.</td></tr>
+                                <tr><td>Re-ID</td><td>Person re-identification across frames or camera contexts.</td></tr>
+                                <tr><td>Session sequence</td><td>Monotonic counter in event metadata used to preserve visitor event order.</td></tr>
+                                <tr><td>Stale feed</td><td>A store event stream whose latest event is older than the expected freshness window.</td></tr>
+                                <tr><td>Zone polygon</td><td>Coordinates defining a store area on the floor plan.</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+                </article>
+            </main>
+        </div>
     </div>
 
     <script>
-        // Initialize Lucide Icons
-        lucide.createIcons();
+        if (window.lucide) {
+            lucide.createIcons();
+        }
 
-        // Simple Scroll Spy for Sidebar
-        const sections = document.querySelectorAll('section');
-        const navLinks = document.querySelectorAll('.nav-link');
-
-        window.addEventListener('scroll', () => {
-            let current = '';
-            sections.forEach(section => {
-                const sectionTop = section.offsetTop;
-                const sectionHeight = section.clientHeight;
-                if (scrollY >= (sectionTop - 150)) {
-                    current = section.getAttribute('id');
+        if (window.mermaid) {
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: "dark",
+                securityLevel: "loose",
+                themeVariables: {
+                    background: "#0a1222",
+                    primaryColor: "#103b3a",
+                    primaryTextColor: "#e5edf8",
+                    primaryBorderColor: "#18c2a7",
+                    lineColor: "#67e8f9",
+                    secondaryColor: "#182235",
+                    tertiaryColor: "#111827"
                 }
             });
+        }
 
-            navLinks.forEach(link => {
-                link.classList.remove('active');
-                if (link.getAttribute('href').includes(current)) {
-                    link.classList.add('active');
-                }
+        const links = Array.from(document.querySelectorAll(".nav-link"));
+        const sections = links
+            .map((link) => document.querySelector(link.getAttribute("href")))
+            .filter(Boolean);
+
+        const activate = () => {
+            const current = sections
+                .filter((section) => section.getBoundingClientRect().top < 150)
+                .pop();
+            links.forEach((link) => {
+                link.classList.toggle("active", current && link.getAttribute("href") === "#" + current.id);
+            });
+        };
+        window.addEventListener("scroll", activate, { passive: true });
+        activate();
+
+        const search = document.getElementById("doc-search");
+        const searchable = Array.from(document.querySelectorAll(".searchable"));
+        search.addEventListener("input", (event) => {
+            const query = event.target.value.trim().toLowerCase();
+            searchable.forEach((section) => {
+                const match = !query || section.innerText.toLowerCase().includes(query);
+                section.style.display = match ? "" : "none";
             });
         });
     </script>
